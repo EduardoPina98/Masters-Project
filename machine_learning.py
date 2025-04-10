@@ -16,12 +16,15 @@ def fetch_records_for_ML():
         user = os.getenv('DB_USER')
         password = os.getenv('DB_PASSWORD')
         host = os.getenv('DB_HOST')
+        port = os.getenv('DB_PORT')
+
+        print(host, port)
 
         if not all([dbname, user, password, host]):
             raise ValueError("Database connection attributes are missing from environment variables.")
         
         # Create SQLAlchemy engine for easier data handling with Pandas
-        connection_string = f"postgresql+psycopg2://{user}:{password}@{host}/{dbname}"
+        connection_string = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
         engine = create_engine(connection_string)
         
         # Query to select data from the table
