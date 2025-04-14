@@ -18,8 +18,6 @@ def fetch_records_for_ML():
         host = os.getenv('DB_HOST')
         port = os.getenv('DB_PORT')
 
-        print(host, port)
-
         if not all([dbname, user, password, host]):
             raise ValueError("Database connection attributes are missing from environment variables.")
         
@@ -33,6 +31,7 @@ def fetch_records_for_ML():
         
         if df.empty:
             logging.warning("No data returned from the query.")
+            return df
         else:
             logging.info(f"Loaded {len(df)} rows from person_record_ml.")
         
@@ -66,7 +65,7 @@ def preprocess_data(df):
     'sleeprestingheartrate': 'sleep_resting_heart_rate'
     }, inplace=True)
 
-    # Convert weight from grams to kg with 3 decimal places
+    # Convert weight from grams to kg and fitness age with 3 decimal places to 1 decimal
     df["weight_kg"] = (df["weight_kg"] / 1000).round(1)
     df["fitness_age"] = df["fitness_age"].round(1)
 
@@ -79,10 +78,12 @@ def preprocess_data(df):
     Dropping unneeded columns
     Dealing with outliers or any other domain-specific transformations
     """
+
     return df
 
 
 if __name__ == "__main__":
+
     df = fetch_records_for_ML()
     
     if df is not None:
@@ -90,6 +91,5 @@ if __name__ == "__main__":
 
         # Preprocess the data here
         df_processed = preprocess_data(df)
-        print(df_processed["weight_kg"])
     else:
         print("No data fetched.")
