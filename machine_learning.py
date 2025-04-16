@@ -4,8 +4,6 @@ from sqlalchemy import create_engine
 import logging
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
-import scipy.stats as stats
-import seaborn as sns
 
 load_dotenv()
 
