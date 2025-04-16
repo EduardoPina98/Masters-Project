@@ -3,6 +3,9 @@ import pandas as pd
 from sqlalchemy import create_engine
 import logging
 from dotenv import load_dotenv
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+import seaborn as sns
 
 load_dotenv()
 
@@ -21,11 +24,14 @@ def fetch_records_for_ML():
         if not all([dbname, user, password, host]):
             raise ValueError("Database connection attributes are missing from environment variables.")
         
-        # Create SQLAlchemy engine for easier data handling with Pandas
+        # SQLAlchemy engine connection for easier data handling with Pandas
         connection_string = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
         engine = create_engine(connection_string)
         
-        # Query to select data from the table
+        # Query to select data from the table 'person_record_ml' which is processed in the database
+        # The data imported in the database is filtered and selected into a new table.
+        # This makes the processing faster and prevents sending unnecssary data to the pre-processing stage area
+
         query = "SELECT * FROM person_record_ml;"
         df = pd.read_sql(query, engine)
         
@@ -41,7 +47,6 @@ def fetch_records_for_ML():
         logging.error(f"Error fetching data with Pandas: {e}")
         return None
 
-
 def preprocess_data(df):
 
     #Naming conventions
@@ -56,7 +61,7 @@ def preprocess_data(df):
     'avgwakingrespirationvalue': 'avg_waking_respiration',
     'weight': 'weight_kg',
     'fitnessage': 'fitness_age',
-    'hydrationvalueinmL': 'hydration_ml',
+    'hydrationvalueinml': 'hydration_ml',
     'averagespo2': 'avg_spo2',
     'lowestspo2': 'min_spo2',
     'avgsleepspo2': 'avg_sleep_spo2',
@@ -65,17 +70,62 @@ def preprocess_data(df):
     'sleeprestingheartrate': 'sleep_resting_heart_rate'
     }, inplace=True)
 
-    # Convert weight from grams to kg and fitness age with 3 decimal places to 1 decimal
+    # Convert weight from grams to kg and fitness age with 3 decimal places to 1 decimal place
     df["weight_kg"] = (df["weight_kg"] / 1000).round(1)
     df["fitness_age"] = df["fitness_age"].round(1)
 
+    # remove id column
+    df = df.drop(columns=['id'])
+
+    #remove null or NaN values from any row
+    df.dropna(how='any', axis=0, inplace=True)
+
+    print(f"\nTotal number of rows in dataset after cleaning {len(df)}")
+
+    #Check missing dates
+    start_date = df['calendar_date'].min()
+    end_date = df['calendar_date'].max()
+    expected_dates = pd.date_range(start=start_date, end=end_date)
+
+    actual_dates = len(df['calendar_date'])
+    missing_count = len(expected_dates) - actual_dates
+    total_expected = len(expected_dates)
+    missing_percetage = (missing_count / total_expected) * 100
+
+    print(f"Total expected dates {total_expected}")
+    print(f"Missing dates {missing_count}")
+    print(f"Missing percentage {int(missing_percetage)}%")
+
+    #Check if data in each column is normalized
+
+    numeric_cols = [col for col in df.columns if col != 'calendar_date' and pd.api.types.is_numeric_dtype(df[col])]
+
+    # for column in numeric_cols:
+    #     plt.figure(figsize=(12, 4))
+
+    #     plt.subplot(1,2,1)
+    #     df[column].hist(bins=30)
+    #     plt.title(f"Outliers {column}")
+
+    #     plt.show()
+
+    #Check if the data is tilted to one side with skewness
+    skewness = df[numeric_cols].skew()
+    print(skewness)
+
+    #The data is not normally distributed so i need to identify which scaling method should i use
+
+    #Feature scaling (normalization)
+    
+    # Multivariate method to find outliers
+
+    # Remove@Alter Outliers
+ 
+
     #TODO: Check other pre-processing techniques
     """
-    Handling missing values
-    Feature scaling (e.g., standardization or normalization)
-    Encoding categorical variables
-    Feature extraction (e.g., from time-based data)
-    Dropping unneeded columns
+    Feature scaling (normalization)
+    Encoding categorical variables (no need since i only have numeric values and not categorical values)
     Dealing with outliers or any other domain-specific transformations
     """
 
@@ -89,7 +139,7 @@ if __name__ == "__main__":
     if df is not None:
         print("Data fetched successfully. Proceeding with preprocessing...")
 
-        # Preprocess the data here
+        # Preprocessing the data
         df_processed = preprocess_data(df)
     else:
         print("No data fetched.")
