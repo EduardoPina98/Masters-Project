@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 import logging
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import RobustScaler
 
 load_dotenv()
 
@@ -80,6 +81,10 @@ def preprocess_data(df):
 
     print(f"\nTotal number of rows in dataset after cleaning {len(df)}")
 
+    # Add target column
+
+
+
     #Check missing dates
     start_date = df['calendar_date'].min()
     end_date = df['calendar_date'].max()
@@ -92,7 +97,7 @@ def preprocess_data(df):
 
     print(f"Total expected dates {total_expected}")
     print(f"Missing dates {missing_count}")
-    print(f"Missing percentage {int(missing_percetage)}%")
+    print(f"Missing percentage {int(missing_percetage)}%\n")
 
     #Check if data in each column is normalized
 
@@ -112,12 +117,20 @@ def preprocess_data(df):
     print(skewness)
 
     #The data is not normally distributed so i need to identify which scaling method should i use
+    #Feature scaling (normalization) robustScaling
 
-    #Feature scaling (normalization)
-    
+    features_scaled = df.drop(columns=['calendar_date'])
+
+    scaler = RobustScaler()
+
+    scaled_data = scaler.fit_transform(features_scaled)
+
+    df_scaled = pd.DataFrame(scaled_data, columns=features_scaled.columns)
+
+
     # Multivariate method to find outliers
 
-    # Remove@Alter Outliers
+    # Remove/Outliers
  
 
     #TODO: Check other pre-processing techniques
