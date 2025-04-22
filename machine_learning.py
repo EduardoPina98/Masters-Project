@@ -5,6 +5,9 @@ import logging
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import RobustScaler
+from sklearn.pipeline import Pipeline
+from sklearn.neighbors import LocalOutlierFactor
+import seaborn as sns
 
 load_dotenv()
 
@@ -83,8 +86,6 @@ def preprocess_data(df):
 
     # Add target column
 
-
-
     #Check missing dates
     start_date = df['calendar_date'].min()
     end_date = df['calendar_date'].max()
@@ -99,45 +100,51 @@ def preprocess_data(df):
     print(f"Missing dates {missing_count}")
     print(f"Missing percentage {int(missing_percetage)}%\n")
 
-    #Check if data in each column is normalized
-
-    numeric_cols = [col for col in df.columns if col != 'calendar_date' and pd.api.types.is_numeric_dtype(df[col])]
-
+    #Check if data in each column is normalized except calendar_date
+    numeric_cols = df.iloc[:, df.columns != 'calendar_date']
+    
     # for column in numeric_cols:
     #     plt.figure(figsize=(12, 4))
 
     #     plt.subplot(1,2,1)
-    #     df[column].hist(bins=30)
+    #     sns.boxplot(x=df[column])
+    #     #df[column].hist(bins=30)
     #     plt.title(f"Outliers {column}")
 
     #     plt.show()
-
-    #Check if the data is tilted to one side with skewness
-    skewness = df[numeric_cols].skew()
-    print(skewness)
-
-    #The data is not normally distributed so i need to identify which scaling method should i use
+    
+    # WHen choosing a multivariate outlier detection method, i need to have in mind 3 steps: data destribution, sample size and number of dimensions
+    #The data is not normally distributed so i need to identify which scaling method should i use, the sample is small for the moment and small dimension
     #Feature scaling (normalization) robustScaling
+    # ALTER TO PIPELINE USING ROBUSTSCALER
+    n_samples = len(df)
 
-    features_scaled = df.drop(columns=['calendar_date'])
+    pipeline = Pipeline([
+        ('scaler', RobustScaler()),
+        ('lof', LocalOutlierFactor(n_neighbors=n_samples-1 , contamination=0.1))
+    ])
 
-    scaler = RobustScaler()
+    outlier_labels = pipeline.fit_predict(numeric_cols)
 
-    scaled_data = scaler.fit_transform(features_scaled)
+    df['outlier_lof'] = outlier_labels
 
-    df_scaled = pd.DataFrame(scaled_data, columns=features_scaled.columns)
+    print(df) # -1 outlier 1 inlier
+
+    
+
 
 
     # Multivariate method to find outliers
 
-    # Remove/Outliers
+    # Remove/Outliers if needed
+
+
+    #Feature selection Technique
  
 
     #TODO: Check other pre-processing techniques
     """
-    Feature scaling (normalization)
     Encoding categorical variables (no need since i only have numeric values and not categorical values)
-    Dealing with outliers or any other domain-specific transformations
     """
 
     return df
