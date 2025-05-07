@@ -80,7 +80,7 @@ def preprocess_data(df):
     df = df.drop(columns=['id'])
 
     #remove null or NaN values from any row
-    df.dropna(how='any', axis=0, inplace=True)
+    df.dropna(how='any', axis=1, inplace=True)
 
     print(f"\nTotal number of rows in dataset after cleaning {len(df)}")
 
@@ -98,57 +98,115 @@ def preprocess_data(df):
     print(f"Missing dates/days: {missing_count}")
     print(f"Missing percentage: {int(missing_percetage)}%\n")
 
-
+    #Create Target Column
     #2 options_ use weights for each feature giving weight to dependent features or add weights to combined feature calculations
     # disregarding dependant features
+    age = 26
 
-    score = 0.0
+    # Example normalized weights (sum = 1)
+    weights = {
+        'vo2max_bmi': 0.13,
+        'vo2max_sleep_time': 0.09,
+        'bmi_resting_hr': 0.12,
+        'sleep_resting_hr': 0.08,
+        'sleep_avg_respiration': 0.07,
+        'avg_waking_respiration_resting_hr': 0.1,
+        'fitness_age_resting_hr': 0.11,
+        'sleep_avg_spo2_sleep_time': 0.08,
+        'steps': 0.06,
+        'hydration_ml': 0.04,
+        'avg_spo2': 0.07,
+        'avg_waking_respiration': 0.05
+    }
 
-    # Combination 1: vo2max + bmi + sleep time(validated)
-    # Articles: Is BMI Associated with Cardiorespiratory Fitness? A Cross-Sectional Analysis Among 8470 Apparently Healthy Subjects Aged 18–94 Years from the Low-Lands Fitness Registry
-    # Article: The importance of cardiorespiratory fitness and sleep duration in early CVD prevention: BMI, resting heart rate and questions about sleep patterns are suggested in risk assessment of young adults, 18–25 years
+    df['cvd_risk_score'] = 0
+    df['cvd_risk'] = 'NaN'
 
-    if 18.5 > df['bmi'] < 24.9 & df['vo2maxprecisevalue'] < 3 & df['sleeptimeseconds'] / 3600 < 6:
-        score += 0.25
+    for index, row in df.iterrows():
+        score = 0.0
 
-    # Combination 2: sleep_avg_spo2 + sleep_avg_respiration
-    if df['avgsleepspo2'] < 94 & df['sleepaveragerespirationvalue'] > 18:
-        score += 0.15
+        # Combination 1: vo2max + bmi (validated)
+        # Articles: Cardiorespiratory fitness, body mass index and mortality: a systematic review and meta-analysis
+        if row['vo2_max_precise'] < 38.0 and (row['bmi'] < 18.5 or row['bmi'] > 24.9):
+            score += weights['vo2max_bmi']
 
-    # Combination 3: steps + sleep time
-    if df['steps'] < 5000 & df['sleeptimeseconds'] / 3600 < 6:
-        score += 0.10
+        # Combination 2: vo2max + sleep time (validated)
+        # Article: The importance of cardiorespiratory fitness and sleep duration in early CVD prevention: BMI, resting heart rate and questions about sleep patterns are suggested in risk assessment of young adults, 18–25 years
+        if row['vo2_max_precise'] < 38.0 and (row['sleep_time_sec'] < 21600  or row['sleep_time_sec'] > 28800):
+            score += weights['vo2max_sleep_time']
 
-    # Combination 4: average_spo2 + avg_waking_respiration
-    if df['averagespo2'] < 94 & df['avgwakingrespirationvalue'] > 20:
-        score += 0.10
+        # Combination 3: bmi + resting heart rate (validated)
+        # Article: Effect of resting heart rate on the risk of metabolic syndrome in adults: a dose–response meta-analysis
+        if (row['bmi'] < 18.5 or row['bmi'] > 24.9) and row['resting_heart_rate'] > 70:
+            score += weights['bmi_resting_hr']
 
-    # Combination 5: hydration + max respiration
-    if df['hydrationvalueinml'] < 1500 & df['highestrespirationvalue'] > 22:
-        score += 0.10
+        # Combination 4: avg_waking_respiration + resting_heart_rate (validated Awake)
+        # Article: Predictive Modeling of Heart Rate from Respiratory Signals at Rest in Young Healthy Humans
+        if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20) and row['resting_heart_rate'] > 70:
+            score += weights['avg_waking_respiration_resting_hr']
+        
+        # Combination 5: Fitness Age + Resting Heart Rate (validated)
+        # Article: Resting heart rate is a population-level biomarker of cardiorespiratory fitness: The Fenland Study
+        if row['fitness_age'] > age and row['resting_heart_rate'] > 70:
+            score += weights['fitness_age_resting_hr']
 
-    # Combination 6: fitness age + min heart rate
-    if df['fitnessage'] > 55 & df['minheartrate'] < 50:
-        score += 0.15
+        # Combination 6: sleep_avg_spo2 + sleep_time (validated)
+        # Article: Respiratory effort during sleep and the rate of prevalent type 2 diabetes in obstructive sleep apnoea
+        if row['avg_sleep_spo2'] < 95.0 and (row['sleep_time_sec'] / 3600 < 6 or row['sleep_time_sec'] / 3600 > 9):
+            score += weights['sleep_avg_spo2_sleep_time']
 
-    # Combination 7: bmi + resting heart rate
-    if df['bmi'] >= 28 & df['restingheartrate'] > 80:
-        score += 0.15
+        #individual variables
+        #steps
+        if row['steps'] < 5000:
+            score += weights['steps']
+
+        #hydration_ml 
+        if row['hydration_ml'] < 1250:
+            score += weights['hydration_ml']
+        #avg_spo2
+        if row['avg_spo2'] < 95.0:
+            score += weights['avg_spo2']
+
+        #avg_waking_respiration 
+        if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20):
+            score += weights['avg_waking_respiration']
+
+        #Sleep Resting Heart Rate
+        if row['sleep_resting_heart_rate'] < 30 or row['sleep_resting_heart_rate'] > 60:
+            score += weights['sleep_resting_hr']
+
+        #Sleep Average Respiration
+        if (row['sleep_avg_respiration'] < 11 or row['sleep_avg_respiration'] > 18):
+            score += weights['sleep_avg_respiration']
+
+        # Assign the risk score to the 'cvd_risk_score' column for the current row
+        df.at[index, 'cvd_risk_score'] = score
+
+
+        if score <= 0.3:
+            df.at[index, 'cvd_risk'] = 'Low'
+        elif score <= 0.6:
+            df.at[index, 'cvd_risk'] = 'Medium'
+        else:
+            df.at[index, 'cvd_risk'] = 'High'
+
+    print(df)
     
-    # combination 8: bmi and spo2 ()
-    
-    if score <= 0.3:
-        return 'low'
-    elif score <= 0.6:
-        return 'medium'
-    else:
-        return 'high'
-    
-    df['risk_score'] = df.apply(calculate_weighted_risk_score, axis=1)
-    df['risk_level'] = df['risk_score'].apply(weighted_risk_label)
+    # Dependent features 
+    #max_respiration
+    #min_respiration
+    #max_heart_rate
+    #min_heart_rate
+    #weight
+    #min_spo2
+
+    #other combinations but not related to CVD
+    # Min Heart Rate + Min Respiration: Classifying sleep-wake stages through recurrent neural networks using pulse oximetry signals
+    # Fitness Age + VO₂ Max: VO₂ max is a direct measure of aerobic capacity and is often used to estimate fitness age.
+    # Fitness Age + BMI + resting heart rate: Independent determinants of VO2max
 
     #Check data distribution
-    df_numeric_cols = df.iloc[:, df.columns != 'calendar_date']
+    #df_numeric_cols = df.iloc[:, df.columns != 'calendar_date']
     
     # for column in df_numeric_cols:
     #     plt.figure(figsize=(12, 4))
@@ -157,10 +215,10 @@ def preprocess_data(df):
     #     plt.show()
 
     # Drop 'calendar_date' to get only numeric columns
-    numeric_cols = df.columns[df.columns != 'calendar_date']
+    #numeric_cols = df.columns[df.columns != 'calendar_date']
 
     # Compute correlation matrix
-    corr = df[numeric_cols].corr()
+    #corr = df[numeric_cols].corr()
 
     # Plot the fature correlation heatmap
     # plt.figure(figsize=(12, 8))
@@ -232,8 +290,7 @@ def preprocess_data(df):
 
     # Compare features with outliers with other variables to verify relanshion ships between the outliers and other variables
 
-    # Add target column
-    #
+
 
 
 
@@ -243,7 +300,7 @@ def preprocess_data(df):
 
     #TODO: Check other pre-processing techniques
     """
-    Encoding categorical variables (no need since i only have numeric values and not categorical values)
+    Encoding categorical labels for target
     """
 
     return df
