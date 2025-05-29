@@ -1,13 +1,17 @@
 import os
 import pandas as pd
+import numpy as np
 from sqlalchemy import create_engine
 import logging
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import RobustScaler
-from sklearn.pipeline import Pipeline
-from sklearn.neighbors import LocalOutlierFactor
 import seaborn as sns
+from sklearn.feature_selection import RFE
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GridSearchCV
 
 load_dotenv()
 
@@ -53,28 +57,36 @@ def preprocess_data(df):
 
     #Naming conventions
     df.rename(columns={
-    'vo2maxprecisevalue': 'vo2_max_precise',
-    'calendardate': 'calendar_date',
-    'minheartrate': 'min_heart_rate',
-    'maxheartrate': 'max_heart_rate',
-    'restingheartrate': 'resting_heart_rate',
-    'highestrespirationvalue': 'max_respiration',
-    'lowestrespirationvalue': 'min_respiration',
-    'avgwakingrespirationvalue': 'avg_waking_respiration',
-    'weight': 'weight_kg',
-    'fitnessage': 'fitness_age',
-    'hydrationvalueinml': 'hydration_ml',
-    'averagespo2': 'avg_spo2',
-    'lowestspo2': 'min_spo2',
-    'avgsleepspo2': 'avg_sleep_spo2',
-    'sleeptimeseconds': 'sleep_time_sec',
-    'sleepaveragerespirationvalue': 'sleep_avg_respiration',
-    'sleeprestingheartrate': 'sleep_resting_heart_rate'
+        'vo2maxprecisevalue': 'vo2_max_precise',
+        'calendardate': 'calendar_date',
+        'minheartrate': 'min_heart_rate',
+        'maxheartrate': 'max_heart_rate',
+        'restingheartrate': 'resting_heart_rate',
+        'highestrespirationvalue': 'max_respiration',
+        'lowestrespirationvalue': 'min_respiration',
+        'avgwakingrespirationvalue': 'avg_waking_respiration',
+        'weight': 'weight_kg',
+        'fitnessage': 'fitness_age',
+        'hydrationvalueinml': 'hydration_ml',
+        'averagespo2': 'avg_spo2',
+        'lowestspo2': 'min_spo2',
+        'avgsleepspo2': 'avg_sleep_spo2',
+        'sleeptimeseconds': 'sleep_time_sec',
+        'sleepaveragerespirationvalue': 'sleep_avg_respiration',
+        'sleeprestingheartrate': 'sleep_resting_heart_rate'
     }, inplace=True)
 
     # Convert weight from grams to kg and fitness age with 3 decimal places to 1 decimal place
     df["weight_kg"] = (df["weight_kg"] / 1000).round(1)
-    df["fitness_age"] = df["fitness_age"].round(1)
+    df["fitness_age"] = df["fitness_age"].round(0).astype(int)
+    df["max_respiration"] = df["max_respiration"].round(0).astype(int)
+    df["min_respiration"] = df["min_respiration"].round(0).astype(int)
+    df["sleep_avg_respiration"] = df["sleep_avg_respiration"].round(0).astype(int)
+    df["avg_spo2"] = df["avg_spo2"].round(0).astype(int)
+    df["min_spo2"] = df["min_spo2"].round(0).astype(int)
+    df["avg_sleep_spo2"] = df["avg_sleep_spo2"].round(0).astype(int)
+    df["avg_waking_respiration"] = df["avg_waking_respiration"].round(0).astype(int)
+    df["hydration_ml"] = df["hydration_ml"].round(0).astype(int)
 
     # remove id column
     df = df.drop(columns=['id'])
@@ -137,7 +149,7 @@ def preprocess_data(df):
         # Justification: High fitness mitigates CVD risk associated with unhealthy sleep of short or long durations.
         # Weight article and Justification: Same article. Both VO₂max (fitness) and sleep duration independently affect cardiovascular recovery; combined effect enhances prediction.
 
-        if row['vo2_max_precise'] < 41.7 and (row['sleep_time_sec'] < 21600  or row['sleep_time_sec'] > 28800):
+        if row['vo2_max_precise'] < 41.7 and (row['sleep_time_sec'] < 21600 or row['sleep_time_sec'] > 28800):
             score += weights['vo2max_sleep_time']
         
         ## Effect of resting heart rate on the risk of metabolic syndrome in adults: a dose–response meta-analysis (T2D) article
@@ -152,7 +164,7 @@ def preprocess_data(df):
         # Weight article and Justification: Both breathing and heart rate are important, but the relationship between the two are not well studied. It is very uncommon for a
         #significant disturbance of a single physiological parameter to occur in isolation. Thus, NEWS Development and Implementation Group
         #believed multiple physiological parameters is a more robust measure of acute-illness severity than single-parameter scoring systems
-        #if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20) and row['resting_heart_rate'] > 60:
+        if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20) and row['resting_heart_rate'] > 60:
             score += weights['avg_waking_respiration_resting_hr']
         
         # Combination 5: Fitness Age + Resting Heart Rate (Validated)
@@ -163,15 +175,17 @@ def preprocess_data(df):
         #heart rate can improve CVD risk stratification. High-risk individuals may be more accurately identified
         #when these two features are evaluated together, as demonstrated by hazard ratios and effect sizes in
         #the studies above.
-        if row['fitness_age'] > age and row['resting_heart_rate'] > 60:
+        if row['fitness_age'] >= age and row['resting_heart_rate'] > 60:
             score += weights['fitness_age_resting_hr']
 
         #  Respiratory effort during sleep and the rate of prevalent type 2 diabetes in obstructive sleep apnoea (T2D) article
-        # Combination 6: sleep_avg_spo2 + sleep_time (validated) 
+        # Combination 6: sleep_avg_spo2 + sleep_time (validated value article): How Are Sleep Characteristics Related to Cardiovascular Health? Results From the Population‐Based HypnoLaus study, 2019 Journal of the American Heart Association: Higher mean sleep SpO₂
+        #strongly associated with better cardiovascular health status, whereas short (<6 h) or long (>8 h)
+        #sleep were more frequent in those with poor CV health  
         # Article: #################################################
         # Justification:
         # Weight article and Justification:
-        if row['avg_sleep_spo2'] < 95.0 and (row['sleep_time_sec'] / 3600 < 6 or row['sleep_time_sec'] / 3600 > 9):
+        if row['avg_sleep_spo2'] < 95 and (row['sleep_time_sec'] < 21600 or row['sleep_time_sec'] > 28800):
             score += weights['sleep_avg_spo2_sleep_time']
 
         #individual variables
@@ -185,21 +199,26 @@ def preprocess_data(df):
         # hydration_ml (Validated Value Article): Fluid and Water Balance: A Scoping Review for the Nordic Nutrition Recommendations, Foods;recommend an adequate intake (AI) of 2.0 liters/day for women and 2.5 liters/day for men, including water from all sources. Given that about 20–30% of water intake comes from food, this translates to a fluid intake of approximately 1.5 to 2.0 liters/day.
         # Article: Middle age serum sodium levels in the upper part of normal range and risk of heart failure, Middle-age high normal serum sodium as a risk factor for accelerated biological aging, chronic diseases, and premature mortality
         # Justification: The article underscores the importance of maintaining good hydration throughout life to potentially slow down the decline in cardiac function and decrease the prevalence of heart failure. While the study does not establish a direct causal relationship, it suggests that poor hydration may increase long-term CVD and heart failure risk.
-        # Weight article and Justification: ######################################
+        # Weight article and Justification: Water intake from foods and beverages and risk of mortality from CVD: the Japan Collaborative Cohort (JACC) Study, 2018:Participants in the highest quintile of total water intake had lower adjusted risk of CVD death
+        # Total and drinking water intake and risk of all-cause and cardiovascular mortality: A systematic review and dose-response meta-analysis of prospective cohort studies, 2021: High consumption of total water is associated with a lower risk of CVD mortality.
         if row['hydration_ml'] < 1500:
             score += weights['hydration_ml']
         
         # avg_spo2 (Validated Value Article): Effect of a lower target oxygen saturation range on the risk of hypoxaemia and elevated NEWS2 scores at a university hospital: a retrospective study BMJ Open Respiratory ResearchOpen Access; Non-contact oxygen saturation monitoring for wound healing process using dual-wavelength simultaneous acquisition imaging system Biomedical Engineering Letters (Springer, 2023)
         # Article: ######################################
         # Justification: ######################################
-        # Weight article and Justification: ######################################
-        if row['avg_spo2'] < 95.0:
+        # Weight article and Justification: Association of hypoxic burden metrics with cardiovascular outcomes in heart failure and sleep-disordered breathing, 2023: were strong independent predictors of the composite outcome of cardiovascular death or HF hospitalization
+        if row['avg_spo2'] < 95:
             score += weights['avg_spo2']
 
         # avg_waking_respiration (Validated Value Article): Respiratory rate and its associations with disease and lifestyle factors in the general population – results from the KORA-FF4 study PloS one, 2025;
         # Article: Respiratory rate predicts outcome after acute myocardial infarction: a prospective cohort study
         # Justification: Elevated respiration rate predicts higher cardiovascular risk.
-        # Weight article and Justification: ######################################
+        # Weight article and Justification: Mean nocturnal respiratory rate predicts cardiovascular and all-cause mortality in community-dwelling older men and women, European Respiratory Journal, 2019:  In adults at rest, any RR between 12 and 20 breathes per minute (bpm) is considered normal; tachypnea is defined as RR greater than 20 bpm
+        #more: Abnormal Awake Respiratory Patterns Are Common in Chronic Heart Failure and May Prevent Evaluation of Autonomic Tone by Measures of Heart Rate Variability, 1997: In conclusion, mounting evidence indicates that a persistently high respiratory
+        #rate is an independent red flag for coronary heart disease, heart failure, stroke, and CV mortality risk –
+        #underlining the adage that “the breath is the indicator of life” in cardiovascular health assessment.
+
         if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20):
             score += weights['avg_waking_respiration']
 
@@ -214,7 +233,7 @@ def preprocess_data(df):
         # Article: Association between nighttime heart rate and cardiovascular mortality in patients with implantable cardioverter-defibrillator: A cohort study
         # Justification: Elevated nocturnal respiration rate is associated with higher CVD risk.
         # Weight article and Justification: Same article. Respiratory effort during sleep and prevalent hypertension in obstructive sleep apnoea. Moderate standalone predictor of cardiovascular and autonomic health, especially related to nocturnal cardiovascular stress.
-        if (row['sleep_avg_respiration'] <= 14 or row['sleep_avg_respiration'] >= 16):
+        if (row['sleep_avg_respiration'] < 14 or row['sleep_avg_respiration'] > 16):
             score += weights['sleep_avg_respiration']
 
         # Assign the risk score to the 'cvd_risk_score' column for the current row
@@ -222,7 +241,7 @@ def preprocess_data(df):
 
         if score <= 0.3:
             df.at[index, 'cvd_risk'] = 'Low'
-        elif score <= 0.6:
+        elif score >= 0.3 and score <= 0.6:
             df.at[index, 'cvd_risk'] = 'Medium'
         else:
             df.at[index, 'cvd_risk'] = 'High'
@@ -231,6 +250,12 @@ def preprocess_data(df):
     risk_mapping = {'Low': 0, 'Medium': 1, 'High': 2}
         
     df['cvd_risk'] = df['cvd_risk'].map(risk_mapping)
+    df['cvd_risk_score'] = df['cvd_risk_score'].round(2)
+
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.max_rows', None)
+
+    df.to_csv('real_data.csv', index=False)
     
     # Dependent features 
     #max_respiration
@@ -271,76 +296,96 @@ def preprocess_data(df):
     # Given the boxplot here is what i found:
 
     
-    # When choosing a multivariate outlier detection method, i need to have in mind 3 steps: data destribution, sample size and number of dimensions
+    #TODO When choosing a multivariate outlier detection method, i need to have in mind 3 steps: data destribution, sample size and number of dimensions
     #The data is not normally distributed so i need to identify which scaling method should i use, the sample is small for the moment and small dimension
-    #Feature scaling (normalization) robustScaling because of outliers
-
-    numeric_cols = df.select_dtypes(include='number').columns
-    df_numeric = df[numeric_cols]
-
-    # Apply RobustScaler to the features
-    scaler = RobustScaler()
-    df_scaled = pd.DataFrame(scaler.fit_transform(df_numeric), columns=numeric_cols)
-    
-    # Melt the dataframe to long format for seaborn
-    df_melted = df_scaled.melt(var_name='Feature', value_name='Scaled Value')
-
-    # Create the boxplot
-    plt.figure(figsize=(10, len(numeric_cols) * 0.5))
-    ax = sns.boxplot(y='Feature', x='Scaled Value', data=df_melted)
-
-    # Annotate outliers
-    for feature in numeric_cols:
-        values = df_scaled[feature]
-        q1 = values.quantile(0.25)
-        q3 = values.quantile(0.75)
-        iqr = q3 - q1
-        lower_bound = q1 - 1.5 * iqr
-        upper_bound = q3 + 1.5 * iqr
-
-        outliers = values[(values < lower_bound) | (values > upper_bound)]
-        for idx in outliers.index:
-            ax.annotate(f"{values[idx]:.2f}",
-                        xy=(values[idx], feature),
-                        xytext=(5, 0),
-                        textcoords='offset points',
-                        fontsize=7,
-                        color='red')
-
-    plt.title('Boxplot with Outlier Annotations (Robust Scaled Features)')
-    plt.tight_layout()
-    plt.show()
-
-    # Apply LOF unsupervised
-    #lof = LocalOutlierFactor(n_neighbors=5, contamination=0.1, novelty=False)
-    #outlier_flags = lof.fit_predict(df_scaled)
-    
-    # Add the results to DataFrame (outlier = -1)
-    #df['outlier'] = outlier_flags
-
-    # Plot and color-code by outlier status
-    # sns.scatterplot(data=df, x='steps', y='vo2_max_precise', hue='outlier', palette={1: "blue", -1: "red"})
-    # plt.title("Steps vs VO2 Max with Outliers Highlighted")
-    # plt.xlabel("Steps")
-    # plt.ylabel("VO2 Max")
-    # plt.grid(True)
-    # plt.show()
-
-
     # Compare features with outliers with other variables to verify relanshion ships between the outliers and other variables
 
+    #Feature scaling (normalization) robustScaling because of outliers
+    # X = features, y = target (encoded as 0,1,2)
+    
+    # x_features = df.drop(columns=['cvd_risk_score', 'calendar_date'])
 
+    # #Integrate sintetic data 
 
+    # df_high_risk = pd.read_csv('high_risk_generated_data.csv')
 
+    # df_combined = pd.concat([df_high_risk, x_features], ignore_index=True)
 
+    # y_target = df_combined['cvd_risk']
 
-    #Feature selection Technique
- 
+    # x_features = df_combined.drop(columns=['cvd_risk'])    
 
-    #TODO: Check other pre-processing techniques
-    """
-    Encoding categorical labels for target
-    """
+    # scaler = RobustScaler()
+    # x_scaled = pd.DataFrame(scaler.fit_transform(x_features), columns=x_features.columns)
+    
+    # Melt the dataframe to long format for seaborn
+    # df_melted = x_scaled.melt(var_name='Feature', value_name='Scaled Value')
+
+    # # Create the boxplot
+    # plt.figure(figsize=(10, len(x_features) * 0.5))
+    # ax = sns.boxplot(y='Feature', x='Scaled Value', data=df_melted)
+
+    # # Annotate outliers
+    # for feature in x_features:
+    #     values = x_scaled[feature]
+    #     q1 = values.quantile(0.25)
+    #     q3 = values.quantile(0.75)
+    #     iqr = q3 - q1
+    #     lower_bound = q1 - 1.5 * iqr
+    #     upper_bound = q3 + 1.5 * iqr
+
+    #     outliers = values[(values < lower_bound) | (values > upper_bound)]
+    #     for idx in outliers.index:
+    #         ax.annotate(f"{values[idx]:.2f}",
+    #                     xy=(values[idx], feature),
+    #                     xytext=(5, 0),
+    #                     textcoords='offset points',
+    #                     fontsize=7,
+    #                     color='red')
+
+    # plt.title('Boxplot with Outlier Annotations (Robust Scaled Features)')
+    # plt.tight_layout()
+    # plt.show()
+
+    # # Feature Selection (Will use RFE with randomforest since using svm will not verify for correlated features. Cant also use chi'square since one of the settings to use chi2 is to not have non negative values (RobustScaler) and only works on categorical values and not on continuous values)
+    # Define the base classifier
+    # rf = RandomForestClassifier(random_state=42)
+
+    # # Define RFE wrapper (no need to fix n_features_to_select here)
+    # rfe = RFE(estimator=rf)
+
+    # # Create the pipeline
+    # pipeline = Pipeline([
+    #     ('feature_selection', rfe),
+    #     ('classification', rf)
+    # ])
+
+    # # Define the grid of parameters to search
+    # param_grid = {
+    #     'feature_selection__n_features_to_select': [5, 6, 7, 8, 9],
+    #     'classification__n_estimators': [100, 200],
+    #     'classification__max_depth': [None, 10, 20],
+    #     'classification__min_samples_split': [2, 4]
+    # }
+
+    # # Set up GridSearchCV
+    # grid_search = GridSearchCV(
+    #     estimator=pipeline,
+    #     param_grid=param_grid,
+    #     cv=5,
+    #     scoring='accuracy',
+    #     n_jobs=-1
+    # )
+
+    # # Fit the model
+    # grid_search.fit(x_scaled, y_target)
+
+    # # Extract results
+    # best_rfe = grid_search.best_estimator_['feature_selection']
+    # selected_features = x_scaled.columns[best_rfe.support_]
+
+    # print("Best parameters found:", grid_search.best_params_)
+    # print("Selected features:", selected_features.tolist())
 
     return df
 
