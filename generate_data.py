@@ -119,120 +119,136 @@
 # df.to_csv('combined_risk_generated_data.csv', index=False)
 # print(df['cvd_risk'].value_counts())
 
+import json
 import random
+import joblib
 import pandas as pd
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.preprocessing import RobustScaler
+from sklearn.feature_selection import RFE
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import learning_curve
 
-option = input("What is your option Perfil-0, Perfil-my-0, Perfil-1, Perfil-my-1, Perfil-2, Perfil-my-2? ")
+
+option = input("What is your option Perfil-0, Perfil-my-0, Perfil-1, Perfil-my-1, Perfil-2, Perfil-my-2, concat, process ? ")
 
 match option:
-    #corrigir 
     case "Perfil-0":
-        # Gerar os dados para o Perfil 0 - Ponto A
-        #Correlação fitness_age x BMI: 0.646
-        #Correlação fitness_age x VO2 Max Precise: -0.625
-        #Correlação entre resting_heart_rate e vo2_max_precise: -0.697
-        #Correlação entre bmi e weight_kg: 0.077
-        
-        random.seed(42)
-        start_date = datetime.date(2024, 1, 1)
-        days = 200
 
-        data = []
+        # random.seed(42)
+        # start_date = datetime.date(2024, 1, 1)
+        # days = 200
 
-        # Função auxiliar para gerar uma data
-        def generate_dates(start_date, days):
-            return [(start_date + datetime.timedelta(days=i)).isoformat() for i in range(days)]
+        # data = []
+
+        # # Função auxiliar para gerar uma data
+        # def generate_dates(start_date, days):
+        #     return [(start_date + datetime.timedelta(days=i)).isoformat() for i in range(days)]
 
 
-        for date in generate_dates(start_date, days):
-            vo2 = round(random.uniform(44.6, 45.1), 1)
-            steps = random.randint(8400, 9500)
-            min_hr = random.randint(46, 49)
-            max_hr = random.randint(173, 179)
-            max_resp = random.randint(18, 20)
-            min_resp = random.randint(10, 12)
-            avg_wake_resp = round(random.randint(13, 15))
-            weight = round(random.uniform(67.0, 67.2), 1)
-            bmi = round(random.uniform(22.8, 22.9), 1)
+        # for date in generate_dates(start_date, days):
+        #     vo2 = round(random.uniform(44.6, 45.1), 1)
+        #     steps = random.randint(8400, 9500)
+        #     min_hr = random.randint(46, 49)
+        #     max_hr = random.randint(173, 179)
+        #     max_resp = random.randint(18, 20)
+        #     min_resp = random.randint(10, 12)
+        #     avg_wake_resp = round(random.randint(13, 15))
+        #     weight = round(random.uniform(67.0, 67.2), 1)
+        #     bmi = round(random.uniform(22.8, 22.9), 1)
 
-            # resting heart rate depende do VO2 max
-            base_rest_hr = 55 - (vo2 - 44.6) * 8  # Ajuste o fator 8 para intensidade da correlação
-            rest_hr = int(round(base_rest_hr + random.gauss(0, 1)))  # ruído gaussiano com std=1
+        #     # resting heart rate depende do VO2 max
+        #     base_rest_hr = 55 - (vo2 - 44.6) * 8  # Ajuste o fator 8 para intensidade da correlação
+        #     rest_hr = int(round(base_rest_hr + random.gauss(0, 1)))  # ruído gaussiano com std=1
 
-            # Normalizar BMI para escala 0-1
-            bmi_min, bmi_max = 22.8, 22.9
-            bmi_factor = (bmi - bmi_min) / (bmi_max - bmi_min)  # 0 a 1
+        #     # Normalizar BMI para escala 0-1
+        #     bmi_min, bmi_max = 22.8, 22.9
+        #     bmi_factor = (bmi - bmi_min) / (bmi_max - bmi_min)  # 0 a 1
             
-            # Normalizar VO2max para escala 0-1
-            vo2_min, vo2_max = 44.6, 45.1
-            vo2_factor = (vo2 - vo2_min) / (vo2_max - vo2_min)  # 0 a 1
+        #     # Normalizar VO2max para escala 0-1
+        #     vo2_min, vo2_max = 44.6, 45.1
+        #     vo2_factor = (vo2 - vo2_min) / (vo2_max - vo2_min)  # 0 a 1
             
-            fitness_age_base = 18
-            # BMI aumenta fitness age, VO2max diminui
-            fitness_age = max(fitness_age_base, fitness_age_base + int(round(bmi_factor)) - int(round(vo2_factor)))
+        #     fitness_age_base = 18
+        #     # BMI aumenta fitness age, VO2max diminui
+        #     fitness_age = max(fitness_age_base, fitness_age_base + int(round(bmi_factor)) - int(round(vo2_factor)))
             
-            hydration = random.randint(1880, 2380)
-            avg_spo2 = random.randint(97, 98)
-            min_spo2 = random.randint(92, 94)
-            avg_sleep_spo2 = avg_spo2 - 1 if random.random() > 0.5 else avg_spo2
-            sleep_time = random.randint(25100, 27100)
-            sleep_avg_resp = round(random.randint(13, 15))
-            sleep_rest_hr = random.randint(51, 54)
+        #     hydration = random.randint(1880, 2380)
+        #     avg_spo2 = random.randint(97, 98)
+        #     min_spo2 = random.randint(92, 94)
+        #     avg_sleep_spo2 = avg_spo2 - 1 if random.random() > 0.5 else avg_spo2
+        #     sleep_time = random.randint(25100, 27100)
+        #     sleep_avg_resp = round(random.randint(13, 15))
+        #     sleep_rest_hr = random.randint(51, 54)
 
-            data.append({
-                "calendar_date": date,
-                "vo2_max_precise": vo2,
-                "steps": steps,
-                "min_heart_rate": min_hr,
-                "max_heart_rate": max_hr,
-                "resting_heart_rate": rest_hr,
-                "max_respiration": max_resp,
-                "min_respiration": min_resp,
-                "avg_waking_respiration": avg_wake_resp,
-                "weight_kg": weight,
-                "fitness_age": fitness_age,
-                "bmi": bmi,
-                "hydration_ml": hydration,
-                "avg_spo2": avg_spo2,
-                "min_spo2": min_spo2,
-                "avg_sleep_spo2": avg_sleep_spo2,
-                "sleep_time_sec": sleep_time,
-                "sleep_avg_respiration": sleep_avg_resp,
-                "sleep_resting_heart_rate": sleep_rest_hr
-            })
+        #     data.append({
+        #         "calendar_date": date,
+        #         "vo2_max_precise": vo2,
+        #         "steps": steps,
+        #         "min_heart_rate": min_hr,
+        #         "max_heart_rate": max_hr,
+        #         "resting_heart_rate": rest_hr,
+        #         "max_respiration": max_resp,
+        #         "min_respiration": min_resp,
+        #         "avg_waking_respiration": avg_wake_resp,
+        #         "weight_kg": weight,
+        #         "fitness_age": fitness_age,
+        #         "bmi": bmi,
+        #         "hydration_ml": hydration,
+        #         "avg_spo2": avg_spo2,
+        #         "min_spo2": min_spo2,
+        #         "avg_sleep_spo2": avg_sleep_spo2,
+        #         "sleep_time_sec": sleep_time,
+        #         "sleep_avg_respiration": sleep_avg_resp,
+        #         "sleep_resting_heart_rate": sleep_rest_hr
+        #     })
 
-        df = pd.DataFrame(data)
-        new_order = [
-            'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
-            'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
-            'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
-            'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
-        ]
-        df = df[new_order]
+        # df = pd.DataFrame(data)
+        # new_order = [
+        #     'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
+        #     'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
+        #     'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
+        #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
+        # ]
+        # df = df[new_order]
 
-        df.to_csv("perfil0_pontoA_dados.csv", index=False)
-        print(df.describe())
+        #correlaçoes
+        # corr_bmi = df['fitness_age'].corr(df['bmi'])
+        # corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
+        # corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
+        # corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
 
-        df = pd.read_csv("perfil0_pontoA_dados.csv")
+        # print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
+        # print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
+        # print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
+        # print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
-        numeric_vars = [
-            'vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
-            'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
-            'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
-            'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
-        ]
+        # df.to_csv("perfil0_pontoA_dados.csv", index=False)
 
-        df.to_csv("perfil0_pontoA_dados.csv", index=False)
+        # df = pd.read_csv("perfil0_pontoA_dados.csv")
+        # df['cvd_risk'] = 0
+
+        # # numeric_vars = [
+        # #     'vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
+        # #     'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
+        # #     'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
+        # #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
+        # # ]
+
+        # df.to_csv("perfil0_pontoA_dados.csv", index=False)
 
         # Carregar o dataset
         df = pd.read_csv("perfil0_pontoA_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
+        df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
@@ -281,17 +297,6 @@ match option:
         # Define a figura
         plt.figure(figsize=(16, 12))
 
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
-
         # Cria o heatmap com a máscara
         sns.heatmap(
             correlation_matrix,
@@ -307,19 +312,27 @@ match option:
         plt.tight_layout()
         plt.show()
         
-    
     case "Perfil-my-0":
         # # Base data from user profile
         # base_height = 175
         # base_age = 26
         # min_fitness_age = 18
 
-        # # Function to calculate fitness age based on VO2max and BMI
+        # # # Function to calculate fitness age based on VO2max and BMI
+        # # def calculate_fitness_age(vo2max, bmi):
+        # #     bmi_factor = max(0, (bmi - 21.5) * 1.8)  # mais peso se IMC > 21.5
+        # #     vo2_factor = max(0, (vo2max - 41.7) * 0.8)
+        # #     fitness_age = max(min_fitness_age, int(round(base_age + bmi_factor - vo2_factor)))
+        # #     return fitness_age
+        
         # def calculate_fitness_age(vo2max, bmi):
-        #     bmi_factor = max(0, (bmi - 21.5) * 1.8)  # mais peso se IMC > 21.5
-        #     vo2_factor = max(0, (vo2max - 41.7) * 0.8)
-        #     fitness_age = max(min_fitness_age, int(round(base_age + bmi_factor - vo2_factor)))
-        #     return fitness_age
+        #     # Penaliza apenas valores VO2 abaixo de 52 com força
+        #     vo2_penalty = max(0, (52.0 - vo2max) * 1.0)  # penalização forte
+        #     bmi_penalty = max(0, (bmi - 22.0) * 0.5)     # penalização leve para IMC > 22
+
+        #     fitness_age = int(round(min_fitness_age + vo2_penalty + bmi_penalty))
+            
+        #     return min(fitness_age, 21)  # Limita ao máximo de 21
 
         # # Function to generate resting_heart_rate with negative correlation with VO2max
         # def calculate_resting_hr(vo2max):
@@ -398,11 +411,17 @@ match option:
 
         # df.to_csv("perfil0_pontoB_dados.csv", index=False)
 
+        
+        df = pd.read_csv("perfil0_pontoB_dados.csv")
+        df['cvd_risk'] = 0
+
+        df.to_csv("perfil0_pontoB_dados.csv", index=False)
+
         # Carregar o dataset
         df = pd.read_csv("perfil0_pontoB_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
+        df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
@@ -450,17 +469,6 @@ match option:
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         # Define a figura
         plt.figure(figsize=(16, 12))
-
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
         # Cria o heatmap com a máscara
         sns.heatmap(
@@ -621,9 +629,13 @@ match option:
 
         # Carregar o dataset
         df = pd.read_csv("perfil1_pontoA_dados.csv")
+        df['cvd_risk'] = 1
+
+        df.to_csv("perfil1_pontoA_dados.csv", index=False)
+        df = pd.read_csv("perfil1_pontoA_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
+        df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
@@ -671,17 +683,6 @@ match option:
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         # Define a figura
         plt.figure(figsize=(16, 12))
-
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
         # Cria o heatmap com a máscara
         sns.heatmap(
@@ -805,9 +806,13 @@ match option:
 
         # Carregar o dataset
         df = pd.read_csv("perfil1_pontoB_dados.csv")
+        df['cvd_risk'] = 1
+
+        df.to_csv("perfil1_pontoB_dados.csv", index=False)
+        df = pd.read_csv("perfil1_pontoB_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
+        df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
@@ -855,17 +860,6 @@ match option:
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         # Define a figura
         plt.figure(figsize=(16, 12))
-
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
         # Cria o heatmap com a máscara
         sns.heatmap(
@@ -1047,10 +1041,14 @@ match option:
         # df.to_csv("perfil2_pontoA_dados.csv", index=False)
 
         # Carregar o dataset
+        #df = pd.read_csv("perfil2_pontoA_dados.csv")
+        #df['cvd_risk'] = 2
+
+        #df.to_csv("perfil2_pontoA_dados.csv", index=False)
         df = pd.read_csv("perfil2_pontoA_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
+        df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
@@ -1098,81 +1096,6 @@ match option:
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         # Define a figura
         plt.figure(figsize=(16, 12))
-
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
-
-        # Carregar o dataset
-        df = pd.read_csv("perfil2_pontoB_dados.csv")
-
-        # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
-
-        # Estilo dos gráficos
-        sns.set_theme(style="whitegrid", palette="muted")
-
-        # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
-
-        # 2. Boxplots (para identificação de outliers)
-        # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
-
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
-
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
-
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
-
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
-
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
-
-        # 3. Heatmap de correlação
-        # Calcula a matriz de correlação
-        correlation_matrix = df_numeric.corr()
-
-        # Cria uma máscara para a parte superior da matriz
-        mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
-        # Define a figura
-        plt.figure(figsize=(16, 12))
-
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
         # Cria o heatmap com a máscara
         sns.heatmap(
@@ -1353,9 +1276,14 @@ match option:
 
         # Carregar o dataset
         df = pd.read_csv("perfil2_pontoB_dados.csv")
+        df['cvd_risk'] = 2
+
+        df.to_csv("perfil2_pontoB_dados.csv", index=False)
+
+        df = pd.read_csv("perfil2_pontoB_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
-        df_numeric = df.drop(columns=["calendar_date"])
+        df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
@@ -1367,8 +1295,6 @@ match option:
         plt.show()
 
         # 2. Boxplots (para identificação de outliers)
-        # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
 
         # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
         num_vars = len(df_numeric.columns)
@@ -1430,10 +1356,151 @@ match option:
         plt.tight_layout()
         plt.show()
 
+    case "concat":
+
+        def verificar_colunas(df_list, grupo_nome):
+            colunas_ref = df_list[0].columns.tolist()
+            todas_iguais = all(df.columns.tolist() == colunas_ref for df in df_list)
+
+            print(f"[{grupo_nome}] Colunas consistentes: {todas_iguais}")
+            
+            if not todas_iguais:
+                for i, df in enumerate(df_list):
+                    print(f"Colunas do DataFrame {i}: {df.columns.tolist()}")
+                raise ValueError(f"As colunas nos DataFrames do grupo '{grupo_nome}' não coincidem.")
+
+        # Juntar perfis do Ponto A
+        df_a0 = pd.read_csv("perfil0_pontoA_dados.csv")
+        df_a1 = pd.read_csv("perfil1_pontoA_dados.csv")
+        df_a2 = pd.read_csv("perfil2_pontoA_dados.csv")
+
+        verificar_colunas([df_a0, df_a1, df_a2], "Ponto A")
+
+        # Concatenar os 3 perfis (não relacionados com os teus dados)
+        df_pontoA = pd.concat([df_a0, df_a1, df_a2], ignore_index=True)
+        df_pontoA.to_csv("dados_consolidados_pontoA.csv", index=False)
+
+        # Juntar perfis do Ponto B (relacionados com os teus dados)
+        df_b0 = pd.read_csv("perfil0_pontoB_dados.csv")
+        df_b1 = pd.read_csv("perfil1_pontoB_dados.csv")
+        df_b2 = pd.read_csv("perfil2_pontoB_dados.csv")
+
+        verificar_colunas([df_b0, df_b1, df_b2], "Ponto B")
+
+        df_pontoB = pd.concat([df_b0, df_b1, df_b2], ignore_index=True)
+        df_pontoB.to_csv("dados_consolidados_pontoB.csv", index=False)
+
+    case "process":
         
+        df = pd.read_csv("dados_consolidados_pontoB.csv")
 
+        df_process = df.drop(columns=["calendar_date"])
 
+        y_target = df_process['cvd_risk']
 
-
-
+        x_features = df_process.drop(columns=['cvd_risk'])
         
+        scaler = RobustScaler()
+        x_scaled = pd.DataFrame(scaler.fit_transform(x_features), columns=x_features.columns)
+
+        rf = RandomForestClassifier()
+        
+        rfe = RFE(estimator=rf)
+
+        tscv = TimeSeriesSplit(n_splits=8)
+
+        # Create the pipeline
+        pipeline = Pipeline([
+            ('feature_selection', rfe)
+        ])
+        # Define the grid parameters to search
+        #sample weight not provided, so all samples have the same weight
+        #monotonic_cst = None, since its not support for multioutput classifications (i.e. when n_outputs_ > 1)
+        param_grid = {
+            'feature_selection__n_features_to_select': [5, 6, 7, 8],
+            'feature_selection__estimator__n_estimators': [100, 200, 300], # number of trees 100 to 500 is usually good. More = better accuracy, slower training.
+            'feature_selection__estimator__max_depth': [3, 4, 5, 6], # None mean full grown. Controls overfitting and i wont use None since i have limited resources
+            'feature_selection__estimator__min_samples_split': [6, 8, 10, 12],
+            'feature_selection__estimator__min_samples_leaf': [4, 5, 6, 8, 10], # i kept the default value since altering the value may smooth the model, especially in regression.
+            'feature_selection__estimator__max_features': ['sqrt', 'log2', 0.3, 0.5], #sqrt is default for classification, log2 may provide better results than sqrt but at a cost of performance
+            'feature_selection__estimator__bootstrap': [True], # By setting true, it will not use the full dataset in each iteration
+            'feature_selection__estimator__max_samples': [0.1, 0.3, 0.5], # 10%, 30% or 50% of total samples 
+            'feature_selection__estimator__criterion': ['gini', 'entropy'], # https://datascience.stackexchange.com/questions/10228/when-should-i-use-gini-impurity-as-opposed-to-information-gain-entropy
+            'feature_selection__estimator__class_weight': [None, 'balanced']
+        }
+
+        # Set up RandomSearchCV
+        # given the number of parameters the n_iter reflects on the number of combinations presented around 3240. Example, by setting n_iter 10, it will randomly sample only 10 different combinations from those 3240 possible ones
+        # i could use the max number of iteration to check all possible combinations but for that i would use gridsearch. SInce i have limited resources, i will use a reasonable number of iter to get a good enough combination
+        # calculate the coverage given the number of iteration and the parameter grid
+        
+        random_search  = RandomizedSearchCV(
+            estimator=pipeline,
+            param_distributions=param_grid,
+            n_iter=50, #increaase if execution time ~10-20 minutes
+            cv=tscv,
+            scoring='accuracy', #
+            n_jobs=4, # leave one core available so that the VM doesnt crash instead of jobs=-1
+            refit=True, #default
+            random_state=0
+        )
+
+        # Fit the model
+        random_search.fit(x_scaled, y_target)
+        
+        best_rfe = random_search.best_estimator_['feature_selection']
+        selected_features = x_scaled.columns[best_rfe.support_]
+
+        print("Selected features:", selected_features.tolist())
+
+        print("Best parameters found:", random_search.best_params_) # best hyperparameters found
+        print("Best CV score found:", random_search.best_score_) # best CV score achieved
+        print("Best estimator found:", random_search.best_estimator_) # the full pipeline with best parameters
+        print("Best CV accuracy:", round(random_search.best_score_, 3)) # detailed info on all tried parameter combos (mean scores, timings, etc).
+        #print("Best CV results:", random_search.cv_results_)
+
+        print(f"CV accuracy: {random_search.best_score_:.3f}")
+        results = pd.DataFrame(random_search.cv_results_)
+        print(results[['mean_test_score', 'std_test_score']])
+
+        # Plot feature importances
+        rf_model = best_rfe.estimator_
+
+        importances = rf_model.feature_importances_
+        importance_df = pd.DataFrame({
+            'Feature': selected_features,
+            'Importance': importances
+        }).sort_values(by='Importance', ascending=False)
+
+        plt.figure(figsize=(10, 6))
+        sns.barplot(data=importance_df, x='Importance', y='Feature')
+        plt.title('Feature Importances from RFE with Random Forest')
+        plt.tight_layout()
+        plt.show()
+
+        selected_features_list = selected_features.tolist()
+        best_params = random_search.best_params_
+        best_score = random_search.best_score_
+        best_estimator = random_search.best_estimator_
+        best_cv_results = random_search.cv_results_
+
+
+        # Save prints/results to a text file
+        with open('random_search_results.txt', 'w') as f:
+            f.write(f"Selected features: {selected_features_list}\n")
+            f.write(f"Best parameters found: {best_params}\n")
+            f.write(f"Best CV score found: {best_score}\n")
+            f.write(f"Best estimator found: {best_estimator}\n")
+            f.write(f"Best cv rseults found: {best_cv_results}\n")
+
+        # Save selected features as JSON
+        with open('selected_features.json', 'w') as f:
+            json.dump(selected_features_list, f)
+
+        # Save the best model pipeline
+        joblib.dump(best_estimator, 'best_pipeline.pkl')
+
+        # Save feature importances as CSV
+        importance_df.to_csv('feature_importances.csv', index=False)
+
+

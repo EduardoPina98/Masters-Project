@@ -55,6 +55,7 @@ def fetch_records_for_ML():
 
 def preprocess_data(df):
 
+    print(f"\nTotal number of rows in dataset {len(df)}")
     #Naming conventions
     df.rename(columns={
         'vo2maxprecisevalue': 'vo2_max_precise',
@@ -76,6 +77,12 @@ def preprocess_data(df):
         'sleeprestingheartrate': 'sleep_resting_heart_rate'
     }, inplace=True)
 
+    # remove id column
+    df = df.drop(columns=['id'])
+
+    #remove null or NaN values from any row
+    df.dropna(how='any', axis=0, inplace=True)
+
     # Convert weight from grams to kg and fitness age with 3 decimal places to 1 decimal place
     df["weight_kg"] = (df["weight_kg"] / 1000).round(1)
     df["fitness_age"] = df["fitness_age"].round(0).astype(int)
@@ -87,12 +94,6 @@ def preprocess_data(df):
     df["avg_sleep_spo2"] = df["avg_sleep_spo2"].round(0).astype(int)
     df["avg_waking_respiration"] = df["avg_waking_respiration"].round(0).astype(int)
     df["hydration_ml"] = df["hydration_ml"].round(0).astype(int)
-
-    # remove id column
-    df = df.drop(columns=['id'])
-
-    #remove null or NaN values from any row
-    df.dropna(how='any', axis=1, inplace=True)
 
     print(f"\nTotal number of rows in dataset after cleaning {len(df)}")
 
@@ -165,6 +166,7 @@ def preprocess_data(df):
         #significant disturbance of a single physiological parameter to occur in isolation. Thus, NEWS Development and Implementation Group
         #believed multiple physiological parameters is a more robust measure of acute-illness severity than single-parameter scoring systems
         if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20) and row['resting_heart_rate'] > 60:
+            
             score += weights['avg_waking_respiration_resting_hr']
         
         # Combination 5: Fitness Age + Resting Heart Rate (Validated)
