@@ -121,6 +121,7 @@
 
 import json
 import random
+import time
 import joblib
 import pandas as pd
 import datetime
@@ -133,11 +134,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import ConfusionMatrixDisplay, accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import learning_curve
+import os
+from sklearn.svm import SVC
 
 
-option = input("What is your option Perfil-0, Perfil-my-0, Perfil-1, Perfil-my-1, Perfil-2, Perfil-my-2, concat, process ? ")
+option = input("What is your option Perfil-0, Perfil-my-0, Perfil-1, Perfil-my-1, Perfil-2, Perfil-my-2, concat, process, ml_A ? ")
 
 match option:
     case "Perfil-0":
@@ -1407,7 +1410,7 @@ match option:
         
         rfe = RFE(estimator=rf)
 
-        tscv = TimeSeriesSplit(n_splits=8)
+        tscv = TimeSeriesSplit(n_splits=7)
 
         # Create the pipeline
         pipeline = Pipeline([
@@ -1437,14 +1440,13 @@ match option:
         random_search  = RandomizedSearchCV(
             estimator=pipeline,
             param_distributions=param_grid,
-            n_iter=50, #increaase if execution time ~10-20 minutes
+            n_iter=75, #increase if execution time ~10-20 minutes
             cv=tscv,
-            scoring='accuracy', #
+            scoring='accuracy',
             n_jobs=4, # leave one core available so that the VM doesnt crash instead of jobs=-1
-            refit=True, #default
             random_state=0
         )
-
+        
         # Fit the model
         random_search.fit(x_scaled, y_target)
         
@@ -1454,12 +1456,11 @@ match option:
         print("Selected features:", selected_features.tolist())
 
         print("Best parameters found:", random_search.best_params_) # best hyperparameters found
-        print("Best CV score found:", random_search.best_score_) # best CV score achieved
         print("Best estimator found:", random_search.best_estimator_) # the full pipeline with best parameters
-        print("Best CV accuracy:", round(random_search.best_score_, 3)) # detailed info on all tried parameter combos (mean scores, timings, etc).
-        #print("Best CV results:", random_search.cv_results_)
+        print(f"Best CV accuracy: {random_search.best_score_:.3f}") # best CV score achieved
+        #print("Best CV results:", random_search.cv_results_) # detailed info on all tried parameter combos (mean scores, timings, etc).
 
-        print(f"CV accuracy: {random_search.best_score_:.3f}")
+        pd.set_option('display.max_rows', None)
         results = pd.DataFrame(random_search.cv_results_)
         print(results[['mean_test_score', 'std_test_score']])
 
@@ -1478,6 +1479,13 @@ match option:
         plt.tight_layout()
         plt.show()
 
+        # Define the folder path for Point A results
+        results_folder = 'results_point_B_2'
+
+        # Check if folder exists, if not, create it
+        os.makedirs(results_folder, exist_ok=True)
+
+
         selected_features_list = selected_features.tolist()
         best_params = random_search.best_params_
         best_score = random_search.best_score_
@@ -1486,7 +1494,7 @@ match option:
 
 
         # Save prints/results to a text file
-        with open('random_search_results.txt', 'w') as f:
+        with open(os.path.join(results_folder, 'random_search_results.txt'), 'w') as f:
             f.write(f"Selected features: {selected_features_list}\n")
             f.write(f"Best parameters found: {best_params}\n")
             f.write(f"Best CV score found: {best_score}\n")
@@ -1494,13 +1502,103 @@ match option:
             f.write(f"Best cv rseults found: {best_cv_results}\n")
 
         # Save selected features as JSON
-        with open('selected_features.json', 'w') as f:
+        with open(os.path.join(results_folder, 'selected_features.json'), 'w') as f:
             json.dump(selected_features_list, f)
 
         # Save the best model pipeline
-        joblib.dump(best_estimator, 'best_pipeline.pkl')
+        joblib.dump(best_estimator, os.path.join(results_folder, 'best_pipeline.pkl'))
 
         # Save feature importances as CSV
-        importance_df.to_csv('feature_importances.csv', index=False)
+        importance_df.to_csv(os.path.join(results_folder, 'feature_importances.csv'), index=False)
 
+    case "ml_A":
+        # Load data
+        df = pd.read_csv("dados_consolidados_pontoA.csv")
+        df.drop(columns=["calendar_date"], inplace=True)
 
+        # Load selected features
+        with open("results_point_A/selected_features.json", "r") as f:
+            selected_features = json.load(f)
+
+        # Prepare data
+        X = df[selected_features]
+        y = df["cvd_risk"]
+
+        # Scale features
+        scaler = RobustScaler()
+        X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+
+        # Split data for final testing (ex., last 15% as test)
+        test_size = int(len(X_scaled) * 0.15)
+        X_train, X_test = X_scaled[:-test_size], X_scaled[-test_size:]
+        y_train, y_test = y[:-test_size], y[-test_size:]
+
+        # SVM pipeline
+        svm = SVC()
+        pipeline = Pipeline([
+            ('svm', svm)
+        ])
+
+        # Define hyperparameter search space
+        param_dist = {
+            'svm__C': [0.1, 1, 10, 100],
+            'svm__kernel': ['linear', 'rbf', 'poly'],
+            'svm__gamma': ['scale', 'auto'],
+            'svm__class_weight': [None, 'balanced']
+        }
+
+        # TimeSeriesSplit CV
+        tscv = TimeSeriesSplit(n_splits=8)
+
+        # RandomizedSearchCV setup
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=param_dist,
+            n_iter=20,
+            scoring='accuracy',
+            cv=tscv,
+            n_jobs=4,
+            random_state=42,
+            verbose=1
+        )
+
+        # ⏱️ Track execution time
+        start_time = time.time()
+
+        # Fit the model
+        random_search.fit(X_train, y_train)
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        # Predict on test set
+        y_pred = random_search.predict(X_test)
+
+        # Classification report
+        report = classification_report(y_test, y_pred, output_dict=True)
+        report_df = pd.DataFrame(report).transpose()
+
+        # Confusion matrix
+        cm = confusion_matrix(y_test, y_pred)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+        disp.plot(cmap="Blues")
+        plt.title("Confusion Matrix - Test Set")
+        plt.tight_layout()
+
+        # Save results
+        results_folder = "svm_results_point_A"
+        os.makedirs(results_folder, exist_ok=True)
+
+        # Save classification report
+        report_df.to_csv(os.path.join(results_folder, "classification_report.csv"))
+        plt.savefig(os.path.join(results_folder, "confusion_matrix.png"))
+
+        # Save model and metadata
+        joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
+
+        with open(os.path.join(results_folder, "training_info.txt"), "w") as f:
+            f.write(f"Execution time (s): {execution_time:.2f}\n")
+            f.write(f"Best parameters: {random_search.best_params_}\n")
+            f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
+
+        print("✅ SVM training, evaluation, and saving completed.")
