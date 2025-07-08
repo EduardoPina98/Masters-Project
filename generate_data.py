@@ -139,6 +139,48 @@ from sklearn.model_selection import learning_curve
 import os
 from sklearn.svm import SVC
 
+def annotate_boxplot(ax, series):
+    stats = series.describe()
+    q1 = stats['25%']
+    q2 = stats['50%']
+    q3 = stats['75%']
+    min_val = stats['min']
+    max_val = stats['max']
+
+    data_range = max_val - min_val
+    y_offset = max(data_range * 0.05, 0.2)
+
+    # Adjust y-limits to give space for labels
+    ax.set_ylim(min_val - y_offset * 2, max_val + y_offset * 2)
+
+    # Label positions
+    
+    ax.text(0, q1, f"Q1: {q1:.2f}", ha='center', va='bottom', fontsize=9)
+
+    # Determine if median overlaps with Q1 or Q3
+    small_gap = y_offset * 1.5  # define what counts as 'too close'
+    if abs(q2 - q1) < small_gap and abs(q3 - q2) < small_gap:
+        # If too close on both sides, move median slightly above Q3
+        ax.text(0, q3 + y_offset * 0.6, f"Med: {q2:.2f}", ha='center', va='bottom', fontsize=9, weight='bold')
+    elif abs(q2 - q1) < abs(q3 - q2):
+        # Closer to Q1 — shift upward
+        ax.text(0, q2 + y_offset * 0.4, f"Med: {q2:.2f}", ha='center', va='bottom', fontsize=9, weight='bold')
+    else:
+        # Closer to Q3 — shift downward
+        ax.text(0, q2 - y_offset * 0.4, f"Med: {q2:.2f}", ha='center', va='top', fontsize=9, weight='bold')
+
+    ax.text(0, q3, f"Q3: {q3:.2f}", ha='center', va='bottom', fontsize=9)
+
+metric_groups = {
+    "Heart Rate Metrics": ['min_heart_rate', 'max_heart_rate', 'resting_heart_rate', 'sleep_resting_heart_rate'],
+    "SPO2 Metrics": ['avg_spo2', 'min_spo2', 'avg_sleep_spo2'],
+    "Respiration Metrics": ['max_respiration', 'min_respiration', 'avg_waking_respiration', 'sleep_avg_respiration'],
+    "Body Composition": ['bmi', 'weight_kg'],
+    "Fitness & Performance": ['vo2_max_precise', 'fitness_age'],
+    "Sleep Metrics": ['sleep_time_sec'],
+    "Movement & Hydration": ['steps', 'hydration_ml']
+}
+
 
 option = input("What is your option Perfil-0, Perfil-my-0, Perfil-1, Perfil-my-1, Perfil-2, Perfil-my-2, concat, process, ml_A ? ")
 
@@ -245,9 +287,11 @@ match option:
         # #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
         # # ]
 
-        # df.to_csv("perfil0_pontoA_dados.csv", index=False)
+        # df.to_csv("perfil0_pontoA_dados_test.csv", index=False)
 
         # Carregar o dataset
+        output_folder = "plots_perfil0_pontoA"
+        os.makedirs(output_folder, exist_ok=True)
         df = pd.read_csv("perfil0_pontoA_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
@@ -257,39 +301,42 @@ match option:
         sns.set_theme(style="whitegrid", palette="muted")
 
         # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
+        # plt.suptitle("Metrics Data Destribution", fontsize=20)
+        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+        # plt.show()
 
         # 2. Boxplots (para identificação de outliers)
         # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
+        #df_numeric = df.select_dtypes(include='number')
 
         # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
+        # Lista com os nomes das variáveis numéricas
+        # Grupos de métricas organizadas por tema
+        
 
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
+        # Gerar boxplots por grupo
+        for group_name, metrics in metric_groups.items():
+            fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 6))
 
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
+            if len(metrics) == 1:
+                axes = [axes]  # garantir que é iterável
 
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
+            for ax, metric in zip(axes, metrics):
+                sns.boxplot(data=df_numeric, y=metric, ax=ax, color='lightblue')
+                ax.set_ylabel("")
+                ax.set_xticks([0])  # one tick (since it's one box per plot)
+                ax.set_xticklabels([metric], ha='center')
+                ax.grid(True)
+                annotate_boxplot(ax, df_numeric[metric])
 
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            fig.suptitle(group_name, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+            filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
+            plt.savefig(filename, dpi=300 ,bbox_inches='tight')
+            plt.show()            
+            plt.close()
 
         # 3. Heatmap de correlação
         # Calcula a matriz de correlação
@@ -311,9 +358,13 @@ match option:
             linewidths=0.5,
             cbar_kws={"shrink": 0.75}
         )
-        plt.title("Mapa de Calor – Correlação entre Variáveis", fontsize=20)
+        plt.title("Heatmap - Correlation between Variables", fontsize=20)
         plt.tight_layout()
+
+        heatmap_file = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.savefig(heatmap_file, dpi=300 ,bbox_inches='tight')
         plt.show()
+        plt.close()
         
     case "Perfil-my-0":
         # # Base data from user profile
@@ -414,13 +465,14 @@ match option:
 
         # df.to_csv("perfil0_pontoB_dados.csv", index=False)
 
-        
-        df = pd.read_csv("perfil0_pontoB_dados.csv")
-        df['cvd_risk'] = 0
+        # df = pd.read_csv("perfil0_pontoB_dados.csv")
+        # df['cvd_risk'] = 0
 
-        df.to_csv("perfil0_pontoB_dados.csv", index=False)
+        # df.to_csv("perfil0_pontoB_dados.csv", index=False)
 
         # Carregar o dataset
+        output_folder = "plots_perfil0_pontoB"
+        os.makedirs(output_folder, exist_ok=True)
         df = pd.read_csv("perfil0_pontoB_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
@@ -430,39 +482,35 @@ match option:
         sns.set_theme(style="whitegrid", palette="muted")
 
         # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
+        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
+        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+        # plt.show()
 
         # 2. Boxplots (para identificação de outliers)
         # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
 
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
+        for group_name, metrics in metric_groups.items():
+            fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 6))
 
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
+            if len(metrics) == 1:
+                axes = [axes]  # garantir que é iterável
 
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
+            for ax, metric in zip(axes, metrics):
+                sns.boxplot(data=df_numeric, y=metric, ax=ax, color='lightblue')
+                ax.set_ylabel("")
+                ax.set_xticks([0])  # one tick (since it's one box per plot)
+                ax.set_xticklabels([metric], ha='center')
+                ax.grid(True)
+                annotate_boxplot(ax, df_numeric[metric])
 
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
+            fig.suptitle(group_name, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
+            plt.savefig(filename, dpi=300 ,bbox_inches='tight')
+            plt.show()            
+            plt.close()
 
         # 3. Heatmap de correlação
         # Calcula a matriz de correlação
@@ -484,9 +532,14 @@ match option:
             linewidths=0.5,
             cbar_kws={"shrink": 0.75}
         )
-        plt.title("Mapa de Calor – Correlação entre Variáveis", fontsize=20)
+
+        plt.title("Heatmap - Correlation between Variables", fontsize=20)
         plt.tight_layout()
+
+        heatmap_file = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.savefig(heatmap_file, dpi=300 ,bbox_inches='tight')
         plt.show()
+        plt.close()
     
     case "Perfil-1":
 
@@ -631,10 +684,13 @@ match option:
         # df.to_csv("perfil1_pontoA_dados.csv", index=False)
 
         # Carregar o dataset
-        df = pd.read_csv("perfil1_pontoA_dados.csv")
-        df['cvd_risk'] = 1
+        # df = pd.read_csv("perfil1_pontoA_dados.csv")
+        # df['cvd_risk'] = 1
 
-        df.to_csv("perfil1_pontoA_dados.csv", index=False)
+        # df.to_csv("perfil1_pontoA_dados.csv", index=False)
+
+        output_folder = "plots_perfil1_pontoA"
+        os.makedirs(output_folder, exist_ok=True)
         df = pd.read_csv("perfil1_pontoA_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
@@ -644,39 +700,35 @@ match option:
         sns.set_theme(style="whitegrid", palette="muted")
 
         # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
+        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
+        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+        # plt.show()
 
-        # 2. Boxplots (para identificação de outliers)
-        # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
+        # 2. Boxplots
+        # Gerar boxplots por grupo
+        for group_name, metrics in metric_groups.items():
+            fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 6))
 
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
+            if len(metrics) == 1:
+                axes = [axes]  # garantir que é iterável
 
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
+            for ax, metric in zip(axes, metrics):
+                sns.boxplot(data=df_numeric, y=metric, ax=ax, color='lightblue')
+                ax.set_ylabel("")
+                ax.set_xticks([0])  # one tick (since it's one box per plot)
+                ax.set_xticklabels([metric], ha='center')
+                ax.grid(True)
+                annotate_boxplot(ax, df_numeric[metric])
 
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
+            fig.suptitle(group_name, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
-
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
+            plt.savefig(filename, dpi=300 ,bbox_inches='tight')
+            plt.show()    
+            plt.close()
+        
 
         # 3. Heatmap de correlação
         # Calcula a matriz de correlação
@@ -698,9 +750,10 @@ match option:
             linewidths=0.5,
             cbar_kws={"shrink": 0.75}
         )
-        plt.title("Mapa de Calor – Correlação entre Variáveis", fontsize=20)
-        plt.tight_layout()
+        heatmap_file = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.savefig(heatmap_file, dpi=300 ,bbox_inches='tight')
         plt.show()
+        plt.close()
          
     case "Perfil-my-1":
 
@@ -808,10 +861,13 @@ match option:
         # df.to_csv("perfil1_pontoB_dados.csv", index=False)
 
         # Carregar o dataset
-        df = pd.read_csv("perfil1_pontoB_dados.csv")
-        df['cvd_risk'] = 1
+        # df = pd.read_csv("perfil1_pontoB_dados.csv")
+        # df['cvd_risk'] = 1
 
-        df.to_csv("perfil1_pontoB_dados.csv", index=False)
+        # df.to_csv("perfil1_pontoB_dados.csv", index=False)
+
+        output_folder = "plots_perfil1_pontoB"
+        os.makedirs(output_folder, exist_ok=True)
         df = pd.read_csv("perfil1_pontoB_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
@@ -821,39 +877,34 @@ match option:
         sns.set_theme(style="whitegrid", palette="muted")
 
         # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
+        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
+        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+        # plt.show()
 
-        # 2. Boxplots (para identificação de outliers)
-        # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
+        # 2. Boxplots 
+        # Gerar boxplots por grupo
+        for group_name, metrics in metric_groups.items():
+            fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 6))
 
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
+            if len(metrics) == 1:
+                axes = [axes]  # garantir que é iterável
 
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
+            for ax, metric in zip(axes, metrics):
+                sns.boxplot(data=df_numeric, y=metric, ax=ax, color='lightblue')
+                ax.set_ylabel("")
+                ax.set_xticks([0])  # one tick (since it's one box per plot)
+                ax.set_xticklabels([metric], ha='center')
+                ax.grid(True)
+                annotate_boxplot(ax, df_numeric[metric])
 
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
+            fig.suptitle(group_name, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
-
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
+            plt.savefig(filename, dpi=300 ,bbox_inches='tight')
+            plt.show()            
+            plt.close()
 
         # 3. Heatmap de correlação
         # Calcula a matriz de correlação
@@ -875,9 +926,13 @@ match option:
             linewidths=0.5,
             cbar_kws={"shrink": 0.75}
         )
-        plt.title("Mapa de Calor – Correlação entre Variáveis", fontsize=20)
+        plt.title("Heatmap - Correlation between Variables", fontsize=20)
         plt.tight_layout()
+
+        heatmap_file = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.savefig(heatmap_file, dpi=300 ,bbox_inches='tight')
         plt.show()
+        plt.close()
 
     case "Perfil-2":
         # np.random.seed(42)  # Para reprodutibilidade
@@ -1048,6 +1103,9 @@ match option:
         #df['cvd_risk'] = 2
 
         #df.to_csv("perfil2_pontoA_dados.csv", index=False)
+
+        output_folder = "plots_perfil2_pontoA"
+        os.makedirs(output_folder, exist_ok=True)
         df = pd.read_csv("perfil2_pontoA_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
@@ -1057,39 +1115,34 @@ match option:
         sns.set_theme(style="whitegrid", palette="muted")
 
         # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
+        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
+        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+        # plt.show()
 
         # 2. Boxplots (para identificação de outliers)
-        # Selecionar apenas colunas numéricas
-        df_numeric = df.select_dtypes(include='number')
+        # Gerar boxplots por grupo
+        for group_name, metrics in metric_groups.items():
+            fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 6))
 
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
+            if len(metrics) == 1:
+                axes = [axes]  # garantir que é iterável
 
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
+            for ax, metric in zip(axes, metrics):
+                sns.boxplot(data=df_numeric, y=metric, ax=ax, color='lightblue')
+                ax.set_ylabel("")
+                ax.set_xticks([0])  # one tick (since it's one box per plot)
+                ax.set_xticklabels([metric], ha='center')
+                ax.grid(True)
+                annotate_boxplot(ax, df_numeric[metric])
 
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
+            fig.suptitle(group_name, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
-
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
+            plt.savefig(filename, dpi=300 ,bbox_inches='tight')
+            plt.show()            
+            plt.close()
 
         # 3. Heatmap de correlação
         # Calcula a matriz de correlação
@@ -1111,9 +1164,13 @@ match option:
             linewidths=0.5,
             cbar_kws={"shrink": 0.75}
         )
-        plt.title("Mapa de Calor - Correlação entre Variáveis", fontsize=20)
+        plt.title("Heatmap - Correlation between Variables", fontsize=20)
         plt.tight_layout()
+
+        heatmap_file = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.savefig(heatmap_file, dpi=300 ,bbox_inches='tight')
         plt.show()
+        plt.close()
 
     case "Perfil-my-2":
 
@@ -1278,11 +1335,13 @@ match option:
         # df.to_csv("perfil2_pontoB_dados.csv", index=False)
 
         # Carregar o dataset
-        df = pd.read_csv("perfil2_pontoB_dados.csv")
-        df['cvd_risk'] = 2
+        # df = pd.read_csv("perfil2_pontoB_dados.csv")
+        # df['cvd_risk'] = 2
 
-        df.to_csv("perfil2_pontoB_dados.csv", index=False)
+        # df.to_csv("perfil2_pontoB_dados.csv", index=False)
 
+        output_folder = "plots_perfil2_pontoB"
+        os.makedirs(output_folder, exist_ok=True)
         df = pd.read_csv("perfil2_pontoB_dados.csv")
 
         # Remover coluna de data para análises puramente numéricas
@@ -1292,37 +1351,34 @@ match option:
         sns.set_theme(style="whitegrid", palette="muted")
 
         # 1. Histogramas
-        df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
+        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
+        # plt.tight_layout(rect=[0, 0, 1, 0.97])
+        # plt.show()
 
         # 2. Boxplots (para identificação de outliers)
 
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        num_vars = len(df_numeric.columns)
-        cols = 4  # Número de colunas por linha
-        rows = (num_vars + cols - 1) // cols  # Calcula número de linhas necessárias
+        for group_name, metrics in metric_groups.items():
+            fig, axes = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 6))
 
-        # Criar figura e eixos
-        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 5 * rows))
-        axes = axes.flatten()
+            if len(metrics) == 1:
+                axes = [axes]  # garantir que é iterável
 
-        # Gerar boxplot para cada variável
-        for i, col in enumerate(df_numeric.columns):
-            ax = axes[i]
-            sns.boxplot(data=df_numeric, x=col, ax=axes[i], color='skyblue')
-            axes[i].set_title(f"Boxplot - {col}")
-            axes[i].set_xlabel("")
-            axes[i].grid(True)
+            for ax, metric in zip(axes, metrics):
+                sns.boxplot(data=df_numeric, y=metric, ax=ax, color='lightblue')
+                ax.set_ylabel("")
+                ax.set_xticks([0])  # one tick (since it's one box per plot)
+                ax.set_xticklabels([metric], ha='center')
+                ax.grid(True)
+                annotate_boxplot(ax, df_numeric[metric])
 
-            # Evita múltiplas legendas repetidas
-            if i == 0:
-                ax.legend()
+            fig.suptitle(group_name, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-        # Apagar subplots não utilizados (caso nº de métricas < nº de subplots criados)
-        for j in range(i + 1, len(axes)):
-            fig.delaxes(axes[j])
+            filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
+            plt.savefig(filename, dpi=300 ,bbox_inches='tight')
+            plt.show()            
+            plt.close()
 
         # 3. Heatmap de correlação
         # Calcula a matriz de correlação
@@ -1332,17 +1388,6 @@ match option:
         mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
         # Define a figura
         plt.figure(figsize=(16, 12))
-
-        #correlaçoes
-        corr_bmi = df['fitness_age'].corr(df['bmi'])
-        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
-
-        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
         # Cria o heatmap com a máscara
         sns.heatmap(
@@ -1355,9 +1400,13 @@ match option:
             linewidths=0.5,
             cbar_kws={"shrink": 0.75}
         )
-        plt.title("Mapa de Calor – Correlação entre Variáveis", fontsize=20)
+        plt.title("Heatmap - Correlation between Variables", fontsize=20)
         plt.tight_layout()
+
+        heatmap_file = os.path.join(output_folder, "correlation_heatmap.png")
+        plt.savefig(heatmap_file, dpi=300 ,bbox_inches='tight')
         plt.show()
+        plt.close()
 
     case "concat":
 
@@ -1403,8 +1452,9 @@ match option:
 
         x_features = df_process.drop(columns=['cvd_risk'])
         
+        #Disadvanatage: This may not perform well when data is highly skewed.
         scaler = RobustScaler()
-        x_scaled = pd.DataFrame(scaler.fit_transform(x_features), columns=x_features.columns)
+        x_scaled = pd.DataFrame(scaler.fit_transform(x_features, y_target), columns=x_features.columns)
 
         rf = RandomForestClassifier()
         
@@ -1417,7 +1467,6 @@ match option:
             ('feature_selection', rfe)
         ])
         # Define the grid parameters to search
-        #sample weight not provided, so all samples have the same weight
         #monotonic_cst = None, since its not support for multioutput classifications (i.e. when n_outputs_ > 1)
         param_grid = {
             'feature_selection__n_features_to_select': [5, 6, 7, 8],
@@ -1514,47 +1563,43 @@ match option:
     case "ml_A":
         # Load data
         df = pd.read_csv("dados_consolidados_pontoA.csv")
-        df.drop(columns=["calendar_date"], inplace=True)
 
         # Load selected features
         with open("results_point_A/selected_features.json", "r") as f:
             selected_features = json.load(f)
 
-        # Prepare data
-        X = df[selected_features]
-        y = df["cvd_risk"]
+        X_train = df[selected_features]
+        y_train = df["cvd_risk"]
 
-        # Scale features
-        scaler = RobustScaler()
-        X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+        # SVC Tips on Practical Use: https://scikit-learn.org/stable/modules/svm.html#shrinking-svm
+        # Avoiding data copy: For SVC, SVR, NuSVC and NuSVR, if the data passed to certain methods is not C-ordered contiguous and double precision, 
+        # it will be copied before calling the underlying C implementation. 
+        # You can check whether a given numpy array is C-contiguous by inspecting its flags attribute.
 
-        # Split data for final testing (ex., last 15% as test)
-        test_size = int(len(X_scaled) * 0.15)
-        X_train, X_test = X_scaled[:-test_size], X_scaled[-test_size:]
-        y_train, y_test = y[:-test_size], y[-test_size:]
+        # Ensure C-contiguous format, but don't scale manually
+        X_scaled_contiguous = np.ascontiguousarray(X_train, dtype=np.float64)
 
-        # SVM pipeline
-        svm = SVC()
         pipeline = Pipeline([
-            ('svm', svm)
+            ('scaler', RobustScaler()),
+            ('svm', SVC())
         ])
 
-        # Define hyperparameter search space
+        # Hyperparameter search space
         param_dist = {
             'svm__C': [0.1, 1, 10, 100],
-            'svm__kernel': ['linear', 'rbf', 'poly'],
+            'svm__kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
+            'svm__degree': [3],
             'svm__gamma': ['scale', 'auto'],
             'svm__class_weight': [None, 'balanced']
         }
 
-        # TimeSeriesSplit CV
-        tscv = TimeSeriesSplit(n_splits=8)
+        # Time series cross-validation
+        tscv = TimeSeriesSplit(n_splits=5)
 
-        # RandomizedSearchCV setup
         random_search = RandomizedSearchCV(
             pipeline,
             param_distributions=param_dist,
-            n_iter=20,
+            n_iter=25,
             scoring='accuracy',
             cv=tscv,
             n_jobs=4,
@@ -1562,43 +1607,28 @@ match option:
             verbose=1
         )
 
-        # ⏱️ Track execution time
+        # Track training time
         start_time = time.time()
+        random_search.fit(X_scaled_contiguous, y_train)
+        execution_time = time.time() - start_time
 
-        # Fit the model
-        random_search.fit(X_train, y_train)
+        print(f"Execution time: {execution_time:.2f}")
+        print(f"Best parameters: {random_search.best_params_}")
+        print(f"Best CV score: {random_search.best_score_:.3f}")
 
-        end_time = time.time()
-        execution_time = end_time - start_time
 
-        # Predict on test set
-        y_pred = random_search.predict(X_test)
-
-        # Classification report
-        report = classification_report(y_test, y_pred, output_dict=True)
-        report_df = pd.DataFrame(report).transpose()
-
-        # Confusion matrix
-        cm = confusion_matrix(y_test, y_pred)
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-        disp.plot(cmap="Blues")
-        plt.title("Confusion Matrix - Test Set")
-        plt.tight_layout()
-
-        # Save results
+        # Save model and training metadata
         results_folder = "svm_results_point_A"
         os.makedirs(results_folder, exist_ok=True)
-
-        # Save classification report
-        report_df.to_csv(os.path.join(results_folder, "classification_report.csv"))
-        plt.savefig(os.path.join(results_folder, "confusion_matrix.png"))
-
-        # Save model and metadata
         joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
 
-        with open(os.path.join(results_folder, "training_info.txt"), "w") as f:
+        with open(os.path.join(results_folder, "training_svm_info.txt"), "w") as f:
             f.write(f"Execution time (s): {execution_time:.2f}\n")
             f.write(f"Best parameters: {random_search.best_params_}\n")
             f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
 
-        print("✅ SVM training, evaluation, and saving completed.")
+        # Optional: save CV grid results
+        cv_results = pd.DataFrame(random_search.cv_results_)
+        cv_results.to_csv(os.path.join(results_folder, "cv_results.csv"), index=False)
+
+        print("SVM training and saving completed.")
