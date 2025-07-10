@@ -138,6 +138,11 @@ from sklearn.metrics import ConfusionMatrixDisplay, accuracy_score, classificati
 from sklearn.model_selection import learning_curve
 import os
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import cross_val_predict
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 def annotate_boxplot(ax, series):
     stats = series.describe()
@@ -1502,8 +1507,6 @@ match option:
         best_rfe = random_search.best_estimator_['feature_selection']
         selected_features = x_scaled.columns[best_rfe.support_]
 
-        print("Selected features:", selected_features.tolist())
-
         print("Best parameters found:", random_search.best_params_) # best hyperparameters found
         print("Best estimator found:", random_search.best_estimator_) # the full pipeline with best parameters
         print(f"Best CV accuracy: {random_search.best_score_:.3f}") # best CV score achieved
@@ -1560,7 +1563,7 @@ match option:
         # Save feature importances as CSV
         importance_df.to_csv(os.path.join(results_folder, 'feature_importances.csv'), index=False)
 
-    case "ml_A":
+    case "ml_SVM":
         # Load data
         df = pd.read_csv("dados_consolidados_pontoA.csv")
 
@@ -1568,43 +1571,59 @@ match option:
         with open("results_point_A/selected_features.json", "r") as f:
             selected_features = json.load(f)
 
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+        df = df.drop_duplicates(subset=selected_features + ['cvd_risk'])
+        print(f"New shape after dropping duplicates: {df.shape}")
+
         X_train = df[selected_features]
         y_train = df["cvd_risk"]
 
+        pipeline = Pipeline([
+            ('scaler', RobustScaler()),
+            ('svm', SVC(random_state=42))
+        ])
+
         # SVC Tips on Practical Use: https://scikit-learn.org/stable/modules/svm.html#shrinking-svm
-        # Avoiding data copy: For SVC, SVR, NuSVC and NuSVR, if the data passed to certain methods is not C-ordered contiguous and double precision, 
+        # Avoiding data copy: For SVC, if the data passed to certain methods is not C-ordered contiguous and double precision, 
         # it will be copied before calling the underlying C implementation. 
         # You can check whether a given numpy array is C-contiguous by inspecting its flags attribute.
 
         # Ensure C-contiguous format, but don't scale manually
-        X_scaled_contiguous = np.ascontiguousarray(X_train, dtype=np.float64)
-
-        pipeline = Pipeline([
-            ('scaler', RobustScaler()),
-            ('svm', SVC())
-        ])
+        X_scaled_contiguous = np.ascontiguousarray(X_train, dtype=np.float64) 
 
         # Hyperparameter search space
         param_dist = {
-            'svm__C': [0.1, 1, 10, 100],
-            'svm__kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
-            'svm__degree': [3],
+            'svm__C': [0.1, 0.2, 0.5, 1, 2, 5], # C param adjust the regularization (Low values: High regularization, allows some misclassifications, focusing on general margin. Better with noisy data. 
+                                                                                    #High values: Low regularization, Tries to classify all points correctly, including outliers. Can lead to overfitting.)
+            'svm__kernel': ['linear', 'rbf'],
             'svm__gamma': ['scale', 'auto'],
-            'svm__class_weight': [None, 'balanced']
+            'svm__tol': [1e-1, 1e-2, 1e-3, 1e-4], # Controls the stopping criterion. Smaller values = more precision but slower training.
+            'svm__shrinking': [True, False], # Use shrinking heuristic
+            'svm__class_weight': ['balanced'], # Class balancing (not impactful with balanced data)
+            'svm__decision_function_shape' : ['ovr'], # Multiclass strategy
         }
 
         # Time series cross-validation
-        tscv = TimeSeriesSplit(n_splits=5)
+        #tscv = TimeSeriesSplit(n_splits=5)
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        
+
+        scoring = {
+            'accuracy': 'accuracy',
+            'f1_macro': 'f1_macro',
+            'precision_macro': 'precision_macro',
+            'recall_macro': 'recall_macro'
+        }
 
         random_search = RandomizedSearchCV(
             pipeline,
             param_distributions=param_dist,
             n_iter=25,
-            scoring='accuracy',
-            cv=tscv,
+            scoring=scoring,
+            refit='f1_macro',
+            cv=skf,
             n_jobs=4,
-            random_state=42,
-            verbose=1
+            random_state=42
         )
 
         # Track training time
@@ -1615,10 +1634,21 @@ match option:
         print(f"Execution time: {execution_time:.2f}")
         print(f"Best parameters: {random_search.best_params_}")
         print(f"Best CV score: {random_search.best_score_:.3f}")
+        print("STD of Accuracy:", random_search.cv_results_['std_test_accuracy'])
+
+        print(X_train.duplicated().sum())
+        print(y_train.value_counts())
+
+        print(df.duplicated(subset=selected_features + ['cvd_risk']).sum())
+
+        y_pred = cross_val_predict(random_search.best_estimator_, X_train, y_train, cv=skf)
+        cm = confusion_matrix(y_train, y_pred)
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0,1,2])
+        disp.plot()
 
 
         # Save model and training metadata
-        results_folder = "svm_results_point_A"
+        results_folder = "svm_results_point_A_1"
         os.makedirs(results_folder, exist_ok=True)
         joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
 
@@ -1627,8 +1657,95 @@ match option:
             f.write(f"Best parameters: {random_search.best_params_}\n")
             f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
 
-        # Optional: save CV grid results
+        # save CV grid results
         cv_results = pd.DataFrame(random_search.cv_results_)
         cv_results.to_csv(os.path.join(results_folder, "cv_results.csv"), index=False)
 
         print("SVM training and saving completed.")
+
+    case "ml_A_LR":
+        # Load data
+        df = pd.read_csv("dados_consolidados_pontoA.csv")
+
+        # Load selected features
+        with open("results_point_A/selected_features.json", "r") as f:
+            selected_features = json.load(f)
+
+        X_train = df[selected_features]
+        y_train = df["cvd_risk"]
+
+        pipeline = Pipeline([
+            ('scaler', RobustScaler()),
+            ('lr', LogisticRegression(multi_class='multinomial', random_state=42))
+        ])
+
+        # SVC Tips on Practical Use: https://scikit-learn.org/stable/modules/svm.html#shrinking-svm
+        # Avoiding data copy: For SVC, if the data passed to certain methods is not C-ordered contiguous and double precision, 
+        # it will be copied before calling the underlying C implementation. 
+        # You can check whether a given numpy array is C-contiguous by inspecting its flags attribute.
+
+        # Hyperparameter search space
+        param_dist = {
+            'lr__penalty': ['l2'],
+            'lr__tol': [1e-1, 1e-2, 1e-3, 1e-4], # Controls the stopping criterion. Smaller values = more precision but slower training.
+            'lr__C': [0.1, 0.2, 0.5, 1, 2, 5], # C param adjust the regularization (Low values: High regularization, allows some misclassifications, focusing on general margin. Better with noisy data. 
+                                                                                    #High values: Low regularization, Tries to classify all points correctly, including outliers. Can lead to overfitting.)
+            'lr__class_weight': [None, 'balanced'], # Class balancing (not impactful with balanced data)
+            'lr__solver': ['lbfgs', 'newton-cg'],
+            'lr__max_iter': [100, 150, 200, 250, 300]
+        }
+
+        scoring = {
+            'accuracy': 'accuracy',
+            'f1_macro': 'f1_macro',
+            'precision_macro': 'precision_macro',
+            'recall_macro': 'recall_macro'
+        }
+
+        # Time series cross-validation
+        tscv = TimeSeriesSplit(n_splits=5)
+
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=param_dist,
+            n_iter=25,
+            scoring=scoring,
+            refit='f1_macro',
+            cv=tscv,
+            n_jobs=4
+        )
+
+        # Track training time
+        start_time = time.time()
+        random_search.fit(X_train, y_train)
+        execution_time = time.time() - start_time
+
+        print(f"Execution time: {execution_time:.2f}")
+        print(f"Best parameters: {random_search.best_params_}")
+        print(f"Best CV score: {random_search.best_score_:.3f}")
+
+
+        # Save model and training metadata
+        results_folder = "lr_results_dataset_A"
+        os.makedirs(results_folder, exist_ok=True)
+        joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
+
+        with open(os.path.join(results_folder, "training_svm_info.txt"), "w") as f:
+            f.write(f"Execution time (s): {execution_time:.2f}\n")
+            f.write(f"Best parameters: {random_search.best_params_}\n")
+            f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
+
+        results_df = pd.DataFrame(random_search.cv_results_)
+
+        # Sort by the refit metric (f1_macro)
+        top_results = results_df.sort_values(by='mean_test_f1_macro', ascending=False)
+
+        # Display top 5 configurations
+        print(top_results[['mean_test_accuracy', 'mean_test_f1_macro', 'mean_test_precision_macro', 'mean_test_recall_macro', 'params']].head())
+
+        # Save CV RScv results
+        results_df.to_csv(os.path.join(results_folder, "cv_results.csv"), index=False)
+
+        
+
+        print("LR training and saving completed.")
