@@ -128,11 +128,12 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import RobustScaler
 from sklearn.feature_selection import RFE
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, cross_val_score, train_test_split
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import ConfusionMatrixDisplay, accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import learning_curve
@@ -143,6 +144,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import cvd_risk_label
 
 def annotate_boxplot(ax, series):
     stats = series.describe()
@@ -186,113 +188,98 @@ metric_groups = {
     "Movement & Hydration": ['steps', 'hydration_ml']
 }
 
+age = 26
+height_cm = 175
 
 option = input("What is your option Perfil-0, Perfil-my-0, Perfil-1, Perfil-my-1, Perfil-2, Perfil-my-2, concat, process, ml_A ? ")
 
 match option:
     case "Perfil-0":
 
-        # random.seed(42)
-        # start_date = datetime.date(2024, 1, 1)
-        # days = 200
+        random.seed(42)
+        start_date = datetime.date(2024, 1, 1)
+        days = 200
 
-        # data = []
+        data = []
 
-        # # Função auxiliar para gerar uma data
-        # def generate_dates(start_date, days):
-        #     return [(start_date + datetime.timedelta(days=i)).isoformat() for i in range(days)]
+        # Função auxiliar para gerar uma data
+        def generate_dates(start_date, days):
+            return [(start_date + datetime.timedelta(days=i)).isoformat() for i in range(days)]
 
 
-        # for date in generate_dates(start_date, days):
-        #     vo2 = round(random.uniform(44.6, 45.1), 1)
-        #     steps = random.randint(8400, 9500)
-        #     min_hr = random.randint(46, 49)
-        #     max_hr = random.randint(173, 179)
-        #     max_resp = random.randint(18, 20)
-        #     min_resp = random.randint(10, 12)
-        #     avg_wake_resp = round(random.randint(13, 15))
-        #     weight = round(random.uniform(67.0, 67.2), 1)
-        #     bmi = round(random.uniform(22.8, 22.9), 1)
+        for date in generate_dates(start_date, days):
+            vo2 = round(random.uniform(44.6, 45.1), 1)
+            steps = random.randint(8400, 9500)
+            min_hr = random.randint(46, 49)
+            max_hr = random.randint(173, 179)
+            max_resp = random.randint(18, 20)
+            min_resp = random.randint(10, 12)
+            avg_wake_resp = round(random.randint(13, 15))
+            weight = round(random.uniform(67.0, 68.0), 1)
+            bmi = round(weight / ((height_cm / 100) ** 2), 1)
 
-        #     # resting heart rate depende do VO2 max
-        #     base_rest_hr = 55 - (vo2 - 44.6) * 8  # Ajuste o fator 8 para intensidade da correlação
-        #     rest_hr = int(round(base_rest_hr + random.gauss(0, 1)))  # ruído gaussiano com std=1
+            # resting heart rate depende do VO2 max
+            base_rest_hr = 55 - (vo2 - 44.6) * 8  # Ajuste o fator 8 para intensidade da correlação
+            rest_hr = int(round(base_rest_hr + random.gauss(0, 1)))  # ruído gaussiano com std=1
 
-        #     # Normalizar BMI para escala 0-1
-        #     bmi_min, bmi_max = 22.8, 22.9
-        #     bmi_factor = (bmi - bmi_min) / (bmi_max - bmi_min)  # 0 a 1
             
-        #     # Normalizar VO2max para escala 0-1
-        #     vo2_min, vo2_max = 44.6, 45.1
-        #     vo2_factor = (vo2 - vo2_min) / (vo2_max - vo2_min)  # 0 a 1
+            fitness_age_base = 18
+            # BMI aumenta fitness age, VO2max diminui
+            fitness_age = round(max(fitness_age_base, round(19 - (vo2 - 44.6) * 3, 1)),0)
             
-        #     fitness_age_base = 18
-        #     # BMI aumenta fitness age, VO2max diminui
-        #     fitness_age = max(fitness_age_base, fitness_age_base + int(round(bmi_factor)) - int(round(vo2_factor)))
-            
-        #     hydration = random.randint(1880, 2380)
-        #     avg_spo2 = random.randint(97, 98)
-        #     min_spo2 = random.randint(92, 94)
-        #     avg_sleep_spo2 = avg_spo2 - 1 if random.random() > 0.5 else avg_spo2
-        #     sleep_time = random.randint(25100, 27100)
-        #     sleep_avg_resp = round(random.randint(13, 15))
-        #     sleep_rest_hr = random.randint(51, 54)
+            hydration = random.randint(1880, 2380)
+            avg_spo2 = random.randint(97, 98)
+            min_spo2 = random.randint(92, 94)
+            avg_sleep_spo2 = round(min_spo2 + random.uniform(1.5, 2.5), 1)
+            sleep_time = random.randint(25100, 27100)
+            sleep_avg_resp = round(random.randint(13, 15))
+            sleep_rest_hr = random.randint(51, 54)
 
-        #     data.append({
-        #         "calendar_date": date,
-        #         "vo2_max_precise": vo2,
-        #         "steps": steps,
-        #         "min_heart_rate": min_hr,
-        #         "max_heart_rate": max_hr,
-        #         "resting_heart_rate": rest_hr,
-        #         "max_respiration": max_resp,
-        #         "min_respiration": min_resp,
-        #         "avg_waking_respiration": avg_wake_resp,
-        #         "weight_kg": weight,
-        #         "fitness_age": fitness_age,
-        #         "bmi": bmi,
-        #         "hydration_ml": hydration,
-        #         "avg_spo2": avg_spo2,
-        #         "min_spo2": min_spo2,
-        #         "avg_sleep_spo2": avg_sleep_spo2,
-        #         "sleep_time_sec": sleep_time,
-        #         "sleep_avg_respiration": sleep_avg_resp,
-        #         "sleep_resting_heart_rate": sleep_rest_hr
-        #     })
+            data.append({
+                "calendar_date": date,
+                "vo2_max_precise": vo2,
+                "steps": steps,
+                "min_heart_rate": min_hr,
+                "max_heart_rate": max_hr,
+                "resting_heart_rate": rest_hr,
+                "max_respiration": max_resp,
+                "min_respiration": min_resp,
+                "avg_waking_respiration": avg_wake_resp,
+                "weight_kg": weight,
+                "fitness_age": fitness_age,
+                "bmi": bmi,
+                "hydration_ml": hydration,
+                "avg_spo2": avg_spo2,
+                "min_spo2": min_spo2,
+                "avg_sleep_spo2": avg_sleep_spo2,
+                "sleep_time_sec": sleep_time,
+                "sleep_avg_respiration": sleep_avg_resp,
+                "sleep_resting_heart_rate": sleep_rest_hr
+            })
 
-        # df = pd.DataFrame(data)
-        # new_order = [
-        #     'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
-        #     'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
-        #     'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
-        #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
-        # ]
-        # df = df[new_order]
+        df = pd.DataFrame(data)
+        new_order = [
+            'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
+            'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
+            'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
+            'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
+        ]
+        df = df[new_order]
 
         #correlaçoes
-        # corr_bmi = df['fitness_age'].corr(df['bmi'])
-        # corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        # corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        # corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
+        corr_bmi = df['fitness_age'].corr(df['bmi'])
+        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
+        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
+        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
 
-        # print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        # print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        # print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        # print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
+        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
+        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
+        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
+        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
-        # df.to_csv("perfil0_pontoA_dados.csv", index=False)
+        df['cvd_risk'] = df.apply(lambda row: cvd_risk_label.compute_cvd_risk_label(row, age), axis=1)
 
-        # df = pd.read_csv("perfil0_pontoA_dados.csv")
-        # df['cvd_risk'] = 0
-
-        # # numeric_vars = [
-        # #     'vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
-        # #     'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
-        # #     'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
-        # #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
-        # # ]
-
-        # df.to_csv("perfil0_pontoA_dados_test.csv", index=False)
+        df.to_csv("perfil0_pontoA_dados.csv", index=False)
 
         # Carregar o dataset
         output_folder = "plots_perfil0_pontoA"
@@ -303,22 +290,7 @@ match option:
         df_numeric = df.drop(columns=["calendar_date", "cvd_risk"])
 
         # Estilo dos gráficos
-        sns.set_theme(style="whitegrid", palette="muted")
-
-        # 1. Histogramas
-        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        # plt.suptitle("Metrics Data Destribution", fontsize=20)
-        # plt.tight_layout(rect=[0, 0, 1, 0.97])
-        # plt.show()
-
-        # 2. Boxplots (para identificação de outliers)
-        # Selecionar apenas colunas numéricas
-        #df_numeric = df.select_dtypes(include='number')
-
-        # Definir layout da figura (número de colunas e linhas baseado no nº de variáveis)
-        # Lista com os nomes das variáveis numéricas
-        # Grupos de métricas organizadas por tema
-        
+        sns.set_theme(style="whitegrid", palette="muted")        
 
         # Gerar boxplots por grupo
         for group_name, metrics in metric_groups.items():
@@ -340,7 +312,7 @@ match option:
 
             filename = os.path.join(output_folder, f"{group_name.replace(' ', '_').lower()}.png")
             plt.savefig(filename, dpi=300 ,bbox_inches='tight')
-            plt.show()            
+            plt.show()       
             plt.close()
 
         # 3. Heatmap de correlação
@@ -486,12 +458,6 @@ match option:
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
 
-        # 1. Histogramas
-        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        # plt.tight_layout(rect=[0, 0, 1, 0.97])
-        # plt.show()
-
         # 2. Boxplots (para identificação de outliers)
         # Selecionar apenas colunas numéricas
 
@@ -548,151 +514,147 @@ match option:
     
     case "Perfil-1":
 
-        # # Funções auxiliares
-        # def generate_vo2max(days, exercise_days):
-        #     vo2_values = []
-        #     last_vo2 = round(random.uniform(37.0, 39.0), 1)
-        #     for i in range(days):
-        #         if i in exercise_days:
-        #             last_vo2 += round(random.uniform(-0.4, 0.6), 1)
-        #             last_vo2 = max(35.0, min(last_vo2, 45.0))
-        #         vo2_values.append(round(last_vo2, 1))
-        #     return vo2_values
+        # Funções auxiliares
+        def generate_vo2max(days, exercise_days):
+            vo2_values = []
+            last_vo2 = round(random.uniform(37.0, 39.0), 1)
+            for i in range(days):
+                if i in exercise_days:
+                    last_vo2 += round(random.uniform(-0.4, 0.6), 1)
+                    last_vo2 = max(35.0, min(last_vo2, 45.0))
+                vo2_values.append(round(last_vo2, 1))
+            return vo2_values
 
-        # def generate_fitness_age(vo2_list):
-        #     ages = []
-        #     for vo2 in vo2_list:
-        #         if vo2 >= 39:
-        #             ages.append(random.randint(22, 24))
-        #         elif vo2 >= 38:
-        #             ages.append(25)
-        #         else:
-        #             ages.append(26)
-        #     return ages
+        def generate_fitness_age(vo2_list):
+            ages = []
+            for vo2 in vo2_list:
+                if vo2 >= 39:
+                    ages.append(random.randint(22, 24))
+                elif 38 >= vo2 < 39:
+                    ages.append(25)
+                else:
+                    ages.append(26)
+            return ages
 
-        # def generate_weight(days, base_weight=79.5):
-        #     return [round(base_weight + random.uniform(-0.3, 0.3), 1) for _ in range(days)]
+        def generate_weight(days, base_weight=79.5):
+            return [round(base_weight + random.uniform(-0.3, 0.3), 1) for _ in range(days)]
 
-        # def generate_bmi(weight_list, height_cm=171):
-        #     height_m = height_cm / 100
-        #     return [round(w / (height_m ** 2), 1) for w in weight_list]
+        def generate_bmi(weight_list, height_cm=171):
+            height_m = height_cm / 100
+            return [round(w / (height_m ** 2), 1) for w in weight_list]
 
-        # def generate_heart_rates(days, exercise_days, vo2_list):
-        #     max_hr = []
-        #     resting_hr = []
-        #     min_hr = []
-        #     for i in range(days):
-        #         if i in exercise_days:
-        #             max_hr.append(random.randint(145, 160))
-        #         else:
-        #             max_hr.append(random.randint(110, 125))
-        #         # Resting HR diminui conforme VO2 max aumenta
-        #         rhr_base = 70 - (vo2_list[i] - 35) * 1.5  # ajuste o coeficiente conforme necessário
-        #         rhr = int(round(rhr_base + random.gauss(0, 1)))  # ruído gaussiano
-        #         resting_hr.append(rhr)
-        #         min_hr.append(rhr - random.randint(3, 8))
-        #     return max_hr, min_hr, resting_hr
+        def generate_heart_rates(days, exercise_days, vo2_list):
+            max_hr = []
+            resting_hr = []
+            min_hr = []
+            for i in range(days):
+                if i in exercise_days:
+                    max_hr.append(random.randint(145, 160))
+                else:
+                    max_hr.append(random.randint(110, 125))
+                # Resting HR diminui conforme VO2 max aumenta
+                rhr_base = 70 - (vo2_list[i] - 35) * 1.5  # ajuste o coeficiente conforme necessário
+                rhr = int(round(rhr_base + random.gauss(0, 1)))  # ruído gaussiano
+                resting_hr.append(rhr)
+                min_hr.append(rhr - random.randint(3, 8))
+            return max_hr, min_hr, resting_hr
 
-        # def generate_hydration(days):
-        #     return [random.randint(1300, 1900) + random.randint(-50, 49) for _ in range(days)]
+        def generate_hydration(days):
+            return [random.randint(1300, 1900) + random.randint(-50, 49) for _ in range(days)]
 
-        # def generate_respiration(days):
-        #     max_resp, min_resp, avg_waking = [], [], []
-        #     for _ in range(days):
-        #         avg = random.randint(14, 16)
-        #         avg_waking.append(avg)
-        #         min_resp.append(avg - random.randint(1, 3))
-        #         max_resp.append(avg + random.randint(1, 3))
-        #     return max_resp, min_resp, avg_waking
+        def generate_respiration(days):
+            max_resp, min_resp, avg_waking = [], [], []
+            for _ in range(days):
+                avg = random.randint(14, 16)
+                avg_waking.append(avg)
+                min_resp.append(avg - random.randint(1, 3))
+                max_resp.append(avg + random.randint(1, 3))
+            return max_resp, min_resp, avg_waking
 
-        # def generate_sleep(days):
-        #     sleep_sec = []
-        #     avg_resp = []
-        #     rest_hr = []
-        #     for _ in range(days):
-        #         duration = random.randint(27000, 33000)
-        #         sleep_sec.append(duration)
-        #         avg_resp.append(random.randint(13, 17))
-        #         rest_hr.append(random.randint(60, 66))
-        #     return sleep_sec, avg_resp, rest_hr
+        def generate_sleep(days):
+            sleep_sec = []
+            avg_resp = []
+            rest_hr = []
+            for _ in range(days):
+                duration = random.randint(27000, 33000)
+                sleep_sec.append(duration)
+                avg_resp.append(random.randint(13, 17))
+                rest_hr.append(random.randint(60, 66))
+            return sleep_sec, avg_resp, rest_hr
 
-        # def generate_spo2(days):
-        #     avg_spo2, min_spo2, sleep_spo2 = [], [], []
-        #     for _ in range(days):
-        #         min_s = round(random.uniform(91.0, 94.0), 1)
-        #         avg_s = round(min_s + random.uniform(1.0, 3.0), 1)
-        #         sleep_s = round(min_s + random.uniform(1.5, 2.5), 1)
-        #         avg_spo2.append(avg_s)
-        #         min_spo2.append(min_s)
-        #         sleep_spo2.append(sleep_s)
-        #     return avg_spo2, min_spo2, sleep_spo2
+        def generate_spo2(days):
+            avg_spo2, min_spo2, sleep_spo2 = [], [], []
+            for _ in range(days):
+                min_s = round(random.uniform(91.0, 94.0), 1)
+                avg_s = round(random.uniform(95.0, 97.0), 1)
+                sleep_s = round(min_s + random.uniform(1.5, 2.5), 1)
+                avg_spo2.append(avg_s)
+                min_spo2.append(min_s)
+                sleep_spo2.append(sleep_s)
+            return avg_spo2, min_spo2, sleep_spo2
 
-        # # Parâmetros principais
-        # days = 200
-        # start_date = datetime.date(2024, 5, 1)
-        # dates = [start_date + datetime.timedelta(days=i) for i in range(days)]
-        # exercise_days = sorted(random.sample(range(days), 7))  # 2-3 vezes por semana
+        # Parâmetros principais
+        days = 200
+        start_date = datetime.date(2024, 5, 1)
+        dates = [start_date + datetime.timedelta(days=i) for i in range(days)]
+        exercise_days = sorted(random.sample(range(days), 7))  # 2-3 vezes por semana
 
-        # # Gerar dados
-        # vo2 = generate_vo2max(days, exercise_days)
-        # fitness_age = generate_fitness_age(vo2)
-        # weight = generate_weight(days)
-        # bmi = generate_bmi(weight)
-        # max_hr, min_hr, rest_hr =  generate_heart_rates(days, exercise_days, vo2)
-        # hydration = generate_hydration(days)
-        # max_resp, min_resp, avg_waking = generate_respiration(days)
-        # sleep_time, sleep_resp, sleep_rhr = generate_sleep(days)
-        # avg_spo2, min_spo2, sleep_spo2 = generate_spo2(days)
-        # steps = [random.randint(1800, 3700) for _ in range(days)]
+        # Gerar dados
+        vo2 = generate_vo2max(days, exercise_days)
+        fitness_age = generate_fitness_age(vo2)
+        weight = generate_weight(days)
+        bmi = generate_bmi(weight)
+        max_hr, min_hr, rest_hr =  generate_heart_rates(days, exercise_days, vo2)
+        hydration = generate_hydration(days)
+        max_resp, min_resp, avg_waking = generate_respiration(days)
+        sleep_time, sleep_resp, sleep_rhr = generate_sleep(days)
+        avg_spo2, min_spo2, sleep_spo2 = generate_spo2(days)
+        steps = [random.randint(1800, 3700) for _ in range(days)]
 
-        # # Compilar DataFrame
-        # df = pd.DataFrame({
-        #     "calendar_date": [d.strftime('%Y-%m-%d') for d in dates],
-        #     "vo2_max_precise": vo2,
-        #     "steps": steps,
-        #     "max_heart_rate": max_hr,
-        #     "min_heart_rate": min_hr,
-        #     "resting_heart_rate": rest_hr,
-        #     "max_respiration": max_resp,
-        #     "min_respiration": min_resp,
-        #     "avg_waking_respiration": avg_waking,
-        #     "weight_kg": weight,
-        #     "fitness_age": fitness_age,
-        #     "bmi": bmi,
-        #     "hydration_ml": hydration,
-        #     "avg_spo2": avg_spo2,
-        #     "min_spo2": min_spo2,
-        #     "avg_sleep_spo2": sleep_spo2,
-        #     "sleep_time_sec": sleep_time,
-        #     "sleep_avg_respiration": sleep_resp,
-        #     "sleep_resting_heart_rate": sleep_rhr
-        # })
+        # Compilar DataFrame
+        df = pd.DataFrame({
+            "calendar_date": [d.strftime('%Y-%m-%d') for d in dates],
+            "vo2_max_precise": vo2,
+            "steps": steps,
+            "max_heart_rate": max_hr,
+            "min_heart_rate": min_hr,
+            "resting_heart_rate": rest_hr,
+            "max_respiration": max_resp,
+            "min_respiration": min_resp,
+            "avg_waking_respiration": avg_waking,
+            "weight_kg": weight,
+            "fitness_age": fitness_age,
+            "bmi": bmi,
+            "hydration_ml": hydration,
+            "avg_spo2": avg_spo2,
+            "min_spo2": min_spo2,
+            "avg_sleep_spo2": sleep_spo2,
+            "sleep_time_sec": sleep_time,
+            "sleep_avg_respiration": sleep_resp,
+            "sleep_resting_heart_rate": sleep_rhr
+        })
 
-        # new_order = [
-        #     'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
-        #     'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
-        #     'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
-        #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
-        # ]
-        # df = df[new_order]
+        new_order = [
+            'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
+            'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
+            'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
+            'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
+        ]
+        df = df[new_order]
 
-        # corr_bmi = df['fitness_age'].corr(df['bmi'])
-        # corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        # corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        # corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
+        corr_bmi = df['fitness_age'].corr(df['bmi'])
+        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
+        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
+        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
 
-        # print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        # print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        # print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        # print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
+        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
+        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
+        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
+        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
-        # df.to_csv("perfil1_pontoA_dados.csv", index=False)
+        df['cvd_risk'] = df.apply(lambda row: cvd_risk_label.compute_cvd_risk_label(row, age), axis=1)
 
-        # Carregar o dataset
-        # df = pd.read_csv("perfil1_pontoA_dados.csv")
-        # df['cvd_risk'] = 1
-
-        # df.to_csv("perfil1_pontoA_dados.csv", index=False)
+        df.to_csv("perfil1_pontoA_dados.csv", index=False)
 
         output_folder = "plots_perfil1_pontoA"
         os.makedirs(output_folder, exist_ok=True)
@@ -703,12 +665,6 @@ match option:
 
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
-
-        # 1. Histogramas
-        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        # plt.tight_layout(rect=[0, 0, 1, 0.97])
-        # plt.show()
 
         # 2. Boxplots
         # Gerar boxplots por grupo
@@ -881,12 +837,6 @@ match option:
         # Estilo dos gráficos
         sns.set_theme(style="whitegrid", palette="muted")
 
-        # 1. Histogramas
-        # df_numeric.hist(bins=30, figsize=(20, 15), edgecolor='black')
-        # plt.suptitle("Distribuição das Métricas (Histograma)", fontsize=20)
-        # plt.tight_layout(rect=[0, 0, 1, 0.97])
-        # plt.show()
-
         # 2. Boxplots 
         # Gerar boxplots por grupo
         for group_name, metrics in metric_groups.items():
@@ -940,174 +890,167 @@ match option:
         plt.close()
 
     case "Perfil-2":
-        # np.random.seed(42)  # Para reprodutibilidade
+        np.random.seed(42)  # Para reprodutibilidade
 
-        # # Configurações básicas
-        # start_date = datetime.date(2024, 4, 1)
-        # days = 200
+        # Configurações básicas
+        start_date = datetime.date(2024, 4, 1)
+        days = 200
 
-        # def is_exercise_day(day_index):
-        #     base = (day_index % 2 == 0)
-        #     noise = np.random.rand() > 0.7
-        #     return base or noise
+        def is_exercise_day(day_index):
+            base = (day_index % 2 == 0)
+            noise = np.random.rand() > 0.7
+            return base or noise
 
-        # # Inicializa listas
-        # dates = []
-        # vo2_max_list = []
-        # steps_list = []
-        # max_hr_list = []
-        # min_hr_list = []
-        # resting_hr_list = []
-        # max_resp_list = []
-        # min_resp_list = []
-        # avg_wake_resp_list = []
-        # weight_list = []
-        # bmi_list = []
-        # hydration_list = []
-        # avg_spo2_list = []
-        # min_spo2_list = []
-        # avg_sleep_spo2_list = []
-        # sleep_time_list = []
-        # sleep_avg_resp_list = []
-        # sleep_resting_hr_list = []
-        # fitness_age_list = []
+        # Inicializa listas
+        dates = []
+        vo2_max_list = []
+        steps_list = []
+        max_hr_list = []
+        min_hr_list = []
+        resting_hr_list = []
+        max_resp_list = []
+        min_resp_list = []
+        avg_wake_resp_list = []
+        weight_list = []
+        bmi_list = []
+        hydration_list = []
+        avg_spo2_list = []
+        min_spo2_list = []
+        avg_sleep_spo2_list = []
+        sleep_time_list = []
+        sleep_avg_resp_list = []
+        sleep_resting_hr_list = []
+        fitness_age_list = []
 
-        # # Constantes
-        # age = 26
-        # weight_kg = 85
-        # height_cm = 175
-        # bmi = weight_kg / ((height_cm / 100) ** 2)
-        # vo2max_low = 20.0
-        # vo2max_high = 29.0
+        # Constantes
+        age = 26
+        weight_kg = 85
+        height_cm = 175
+        bmi = weight_kg / ((height_cm / 100) ** 2)
+        vo2max_low = 20.0
+        vo2max_high = 29.0
 
-        # for i in range(days):
-        #     date = start_date + datetime.timedelta(days=i)
-        #     exercise = is_exercise_day(i)
+        for i in range(days):
+            date = start_date + datetime.timedelta(days=i)
+            exercise = is_exercise_day(i)
             
-        #     dates.append(date.strftime('%Y-%m-%d'))
+            dates.append(date.strftime('%Y-%m-%d'))
 
-        #     # VO2 max
-        #     if i == 0:
-        #         vo2_max = np.random.uniform(vo2max_low, vo2max_high)
-        #     else:
-        #         if exercise:
-        #             vo2_max = np.clip(vo2_max_list[-1] + np.random.uniform(-1.5, 1.5), vo2max_low, vo2max_high)
-        #         else:
-        #             vo2_max = max(vo2max_low, vo2_max_list[-1] - np.random.uniform(0.1, 0.4))
-        #     vo2_max = round(vo2_max, 1)
-        #     vo2_max_list.append(vo2_max)
+            # VO2 max
+            if i == 0:
+                vo2_max = np.random.uniform(vo2max_low, vo2max_high)
+            else:
+                if exercise:
+                    vo2_max = np.clip(vo2_max_list[-1] + np.random.uniform(-1.5, 1.5), vo2max_low, vo2max_high)
+                else:
+                    vo2_max = max(vo2max_low, vo2_max_list[-1] - np.random.uniform(0.1, 0.4))
+            vo2_max = round(vo2_max, 1)
+            vo2_max_list.append(vo2_max)
 
-        #     # Adiciona dependência direta de fitness_age ao VO2 com menos ruído
-        #     fitness_age_val = int(60 - (vo2_max * 0.7) + np.random.normal(0, 1.0))
-        #     fitness_age_val = np.clip(fitness_age_val, 20, 65)
+            # Adiciona dependência direta de fitness_age ao VO2 com menos ruído
+            fitness_age_val = int(60 - (vo2_max * 0.7) + np.random.normal(0, 1.0))
+            fitness_age_val = np.clip(fitness_age_val, 20, 65)
 
-        #     fitness_age_list.append(fitness_age_val)
+            fitness_age_list.append(fitness_age_val)
 
-        #     # Passos
-        #     steps = int(np.random.normal(3500 if exercise else 1500, 500))
-        #     steps_list.append(max(0, steps))
+            # Passos
+            steps = int(np.random.normal(3500 if exercise else 1500, 500))
+            steps_list.append(max(0, steps))
 
-        #     # HRs
-        #     max_hr = int(np.random.normal(130 if exercise else 100, 8))
-        #     max_hr_list.append(max_hr)
+            # HRs
+            max_hr = int(np.random.normal(130 if exercise else 100, 8))
+            max_hr_list.append(max_hr)
 
-        #     min_hr = int(np.random.normal(55, 5))
-        #     min_hr_list.append(min_hr)
+            min_hr = int(np.random.normal(55, 5))
+            min_hr_list.append(min_hr)
 
-        #     resting_hr_base = 78 - (vo2_max * 0.4)  # Ex: VO2 = 25 → HR ~ 68
-        #     resting_hr = int(np.random.normal(resting_hr_base, 2))
+            resting_hr_base = 78 - (vo2_max * 0.4)  # Ex: VO2 = 25 → HR ~ 68
+            resting_hr = int(np.random.normal(resting_hr_base, 2))
 
-        #     resting_hr_list.append(resting_hr)
+            resting_hr_list.append(resting_hr)
 
-        #     # Respiração
-        #     max_resp = int(np.random.normal(20 if exercise else 18, 2))
-        #     min_resp = int(np.random.normal(12, 1))
-        #     avg_wake_resp = int(np.random.normal(16, 1))
-        #     max_resp_list.append(max_resp)
-        #     min_resp_list.append(min_resp)
-        #     avg_wake_resp_list.append(avg_wake_resp)
+            # Respiração
+            max_resp = int(np.random.normal(20 if exercise else 18, 2))
+            min_resp = int(np.random.normal(12, 1))
+            avg_wake_resp = int(np.random.normal(16, 1))
+            max_resp_list.append(max_resp)
+            min_resp_list.append(min_resp)
+            avg_wake_resp_list.append(avg_wake_resp)
 
-        #     # Peso & BMI
-        #     weight = round(weight_kg + np.random.normal(0, 0.5), 1)
-        #     weight_list.append(weight)
-        #     bmi_val = round(weight / ((height_cm / 100) ** 2), 1)
-        #     bmi_list.append(bmi_val)
+            # Peso & BMI
+            weight = round(weight_kg + np.random.normal(0, 0.5), 1)
+            weight_list.append(weight)
+            bmi_val = round(weight / ((height_cm / 100) ** 2), 1)
+            bmi_list.append(bmi_val)
 
-        #     # Hidratação
-        #     hydration = int(np.random.normal(1650, 200))
-        #     hydration_list.append(max(1000, hydration))
+            # Hidratação
+            hydration = int(np.random.normal(1650, 200))
+            hydration_list.append(max(1000, hydration))
 
-        #     # SpO2
-        #     avg_spo2 = round(np.random.normal(95, 1), 1)
-        #     min_spo2 = round(np.random.normal(90, 1.5), 1)
-        #     avg_sleep_spo2 = round((avg_spo2 + min_spo2) / 2, 1)
-        #     avg_spo2_list.append(avg_spo2)
-        #     min_spo2_list.append(min_spo2)
-        #     avg_sleep_spo2_list.append(avg_sleep_spo2)
+            # SpO2
+            avg_spo2 = round(np.random.normal(95, 1), 1)
+            min_spo2 = round(np.random.normal(90, 1.5), 1)
+            avg_sleep_spo2 = round(min_spo2 + random.uniform(1.5, 2.5), 1)
+            avg_spo2_list.append(avg_spo2)
+            min_spo2_list.append(min_spo2)
+            avg_sleep_spo2_list.append(avg_sleep_spo2)
 
-        #     # Sono
-        #     sleep_hours = np.random.choice(
-        #         [np.random.uniform(4, 6), np.random.uniform(6, 8), np.random.uniform(8, 10)],
-        #         p=[0.2, 0.6, 0.2]
-        #     )
-        #     sleep_time = int(sleep_hours * 3600)
-        #     sleep_time_list.append(sleep_time)
+            # Sono
+            sleep_hours = np.random.choice(
+                [np.random.uniform(4, 6), np.random.uniform(6, 8), np.random.uniform(8, 10)],
+                p=[0.2, 0.6, 0.2]
+            )
+            sleep_time = int(sleep_hours * 3600)
+            sleep_time_list.append(sleep_time)
 
-        #     sleep_avg_resp = int(np.random.normal(15, 1))
-        #     sleep_avg_resp_list.append(sleep_avg_resp)
+            sleep_avg_resp = int(np.random.normal(15, 1))
+            sleep_avg_resp_list.append(sleep_avg_resp)
 
-        #     sleep_resting_hr = int(np.random.normal(resting_hr - 5, 2))
-        #     sleep_resting_hr_list.append(sleep_resting_hr)
+            sleep_resting_hr = round(np.random.normal(78, 74), 2)
+            sleep_resting_hr_list.append(sleep_resting_hr)
 
-        # # Criar DataFrame
-        # df = pd.DataFrame({
-        #     "calendar_date": dates,
-        #     "vo2_max_precise": vo2_max_list,
-        #     "steps": steps_list,
-        #     "max_heart_rate": max_hr_list,
-        #     "min_heart_rate": min_hr_list,
-        #     "resting_heart_rate": resting_hr_list,
-        #     "max_respiration": max_resp_list,
-        #     "min_respiration": min_resp_list,
-        #     "avg_waking_respiration": avg_wake_resp_list,
-        #     "weight_kg": weight_list,
-        #     "bmi": bmi_list,
-        #     "hydration_ml": hydration_list,
-        #     "avg_spo2": avg_spo2_list,
-        #     "min_spo2": min_spo2_list,
-        #     "avg_sleep_spo2": avg_sleep_spo2_list,
-        #     "sleep_time_sec": sleep_time_list,
-        #     "sleep_avg_respiration": sleep_avg_resp_list,
-        #     "sleep_resting_heart_rate": sleep_resting_hr_list,
-        #     "fitness_age": fitness_age_list
-        # })
+        # Criar DataFrame
+        df = pd.DataFrame({
+            "calendar_date": dates,
+            "vo2_max_precise": vo2_max_list,
+            "steps": steps_list,
+            "max_heart_rate": max_hr_list,
+            "min_heart_rate": min_hr_list,
+            "resting_heart_rate": resting_hr_list,
+            "max_respiration": max_resp_list,
+            "min_respiration": min_resp_list,
+            "avg_waking_respiration": avg_wake_resp_list,
+            "weight_kg": weight_list,
+            "bmi": bmi_list,
+            "hydration_ml": hydration_list,
+            "avg_spo2": avg_spo2_list,
+            "min_spo2": min_spo2_list,
+            "avg_sleep_spo2": avg_sleep_spo2_list,
+            "sleep_time_sec": sleep_time_list,
+            "sleep_avg_respiration": sleep_avg_resp_list,
+            "sleep_resting_heart_rate": sleep_resting_hr_list,
+            "fitness_age": fitness_age_list
+        })
 
-        # new_order = [
-        #     'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
-        #     'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
-        #     'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
-        #     'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
-        # ]
-        # df = df[new_order]
+        new_order = [
+            'calendar_date','vo2_max_precise', 'steps', 'min_heart_rate', 'max_heart_rate', 'resting_heart_rate',
+            'max_respiration', 'min_respiration', 'avg_waking_respiration', 'weight_kg',
+            'fitness_age', 'bmi', 'hydration_ml', 'avg_spo2', 'min_spo2', 'avg_sleep_spo2',
+            'sleep_time_sec', 'sleep_avg_respiration', 'sleep_resting_heart_rate'
+        ]
+        df = df[new_order]
 
-        # corr_bmi = df['fitness_age'].corr(df['bmi'])
-        # corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
-        # corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
-        # corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
+        corr_bmi = df['fitness_age'].corr(df['bmi'])
+        corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
+        corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
+        corr_bmi_weight = df['bmi'].corr(df['weight_kg'])
 
-        # print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
-        # print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
-        # print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
-        # print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
+        print(f"Correlação fitness_age x BMI: {corr_bmi:.3f}")
+        print(f"Correlação fitness_age x VO2 Max Precise: {corr_vo2:.3f}")
+        print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
+        print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
-        # # Exportar para CSV
-        # df.to_csv("perfil2_pontoA_dados.csv", index=False)
-
-        # Carregar o dataset
-        #df = pd.read_csv("perfil2_pontoA_dados.csv")
-        #df['cvd_risk'] = 2
-
-        #df.to_csv("perfil2_pontoA_dados.csv", index=False)
+        df['cvd_risk'] = df.apply(lambda row: cvd_risk_label.compute_cvd_risk_label(row, age), axis=1)
 
         output_folder = "plots_perfil2_pontoA"
         os.makedirs(output_folder, exist_ok=True)
@@ -1565,48 +1508,41 @@ match option:
 
     case "ml_SVM":
         # Load data
-        df = pd.read_csv("dados_consolidados_pontoA.csv")
+        df = pd.read_csv("dados_consolidados_pontoB.csv")
+
+        df_new = df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+        save_df = df_new.to_csv("new_datasetA_shuffle", index=False)
 
         # Load selected features
-        with open("results_point_A/selected_features.json", "r") as f:
+        with open("results_point_B/selected_features.json", "r") as f:
             selected_features = json.load(f)
 
-        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
-        df = df.drop_duplicates(subset=selected_features + ['cvd_risk'])
-        print(f"New shape after dropping duplicates: {df.shape}")
+        X = df[selected_features]
+        y = df["cvd_risk"]
 
-        X_train = df[selected_features]
-        y_train = df["cvd_risk"]
+        # 80/20 train-test split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, stratify=y, random_state=42
+        )
 
         pipeline = Pipeline([
             ('scaler', RobustScaler()),
             ('svm', SVC(random_state=42))
         ])
 
-        # SVC Tips on Practical Use: https://scikit-learn.org/stable/modules/svm.html#shrinking-svm
-        # Avoiding data copy: For SVC, if the data passed to certain methods is not C-ordered contiguous and double precision, 
-        # it will be copied before calling the underlying C implementation. 
-        # You can check whether a given numpy array is C-contiguous by inspecting its flags attribute.
-
-        # Ensure C-contiguous format, but don't scale manually
-        X_scaled_contiguous = np.ascontiguousarray(X_train, dtype=np.float64) 
-
-        # Hyperparameter search space
         param_dist = {
-            'svm__C': [0.1, 0.2, 0.5, 1, 2, 5], # C param adjust the regularization (Low values: High regularization, allows some misclassifications, focusing on general margin. Better with noisy data. 
-                                                                                    #High values: Low regularization, Tries to classify all points correctly, including outliers. Can lead to overfitting.)
+            'svm__C': [0.1, 0.2, 0.5, 1, 2, 5, 10, 100],
             'svm__kernel': ['linear', 'rbf'],
             'svm__gamma': ['scale', 'auto'],
-            'svm__tol': [1e-1, 1e-2, 1e-3, 1e-4], # Controls the stopping criterion. Smaller values = more precision but slower training.
-            'svm__shrinking': [True, False], # Use shrinking heuristic
-            'svm__class_weight': ['balanced'], # Class balancing (not impactful with balanced data)
-            'svm__decision_function_shape' : ['ovr'], # Multiclass strategy
+            'svm__tol': [1e-1, 1e-2, 1e-3, 1e-4],
+            'svm__shrinking': [True, False],
+            'svm__class_weight': [None, 'balanced'],
+            'svm__decision_function_shape': ['ovr'],
+            'svm__break_ties': [True, False]
         }
 
-        # Time series cross-validation
-        #tscv = TimeSeriesSplit(n_splits=5)
-        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
         scoring = {
             'accuracy': 'accuracy',
@@ -1618,17 +1554,17 @@ match option:
         random_search = RandomizedSearchCV(
             pipeline,
             param_distributions=param_dist,
-            n_iter=25,
+            n_iter=50,
             scoring=scoring,
-            refit='f1_macro',
-            cv=skf,
+            refit='accuracy',
+            cv=cv,
             n_jobs=4,
             random_state=42
         )
 
         # Track training time
         start_time = time.time()
-        random_search.fit(X_scaled_contiguous, y_train)
+        random_search.fit(X_train, y_train)
         execution_time = time.time() - start_time
 
         print(f"Execution time: {execution_time:.2f}")
@@ -1636,18 +1572,21 @@ match option:
         print(f"Best CV score: {random_search.best_score_:.3f}")
         print("STD of Accuracy:", random_search.cv_results_['std_test_accuracy'])
 
-        print(X_train.duplicated().sum())
-        print(y_train.value_counts())
+        # Predict on test set
+        y_pred = random_search.best_estimator_.predict(X_test)
 
-        print(df.duplicated(subset=selected_features + ['cvd_risk']).sum())
+        # Confusion Matrix
+        cm = confusion_matrix(y_test, y_pred, labels=[0, 1, 2])
+        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Low", "Medium", "High"])
+        disp.plot(cmap='Blues')
+        plt.title("Confusion Matrix - Test Set")
+        plt.show()
+        
 
-        y_pred = cross_val_predict(random_search.best_estimator_, X_train, y_train, cv=skf)
-        cm = confusion_matrix(y_train, y_pred)
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0,1,2])
-        disp.plot()
+        # Classification Report
+        print("Classification Report:\n", classification_report(y_test, y_pred))
 
-
-        # Save model and training metadata
+        # Save model and metadata
         results_folder = "svm_results_point_A_1"
         os.makedirs(results_folder, exist_ok=True)
         joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
@@ -1656,12 +1595,6 @@ match option:
             f.write(f"Execution time (s): {execution_time:.2f}\n")
             f.write(f"Best parameters: {random_search.best_params_}\n")
             f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
-
-        # save CV grid results
-        cv_results = pd.DataFrame(random_search.cv_results_)
-        cv_results.to_csv(os.path.join(results_folder, "cv_results.csv"), index=False)
-
-        print("SVM training and saving completed.")
 
     case "ml_A_LR":
         # Load data

@@ -166,7 +166,6 @@ def preprocess_data(df):
         #significant disturbance of a single physiological parameter to occur in isolation. Thus, NEWS Development and Implementation Group
         #believed multiple physiological parameters is a more robust measure of acute-illness severity than single-parameter scoring systems
         if (row['avg_waking_respiration'] < 12 or row['avg_waking_respiration'] > 20) and row['resting_heart_rate'] > 60:
-            
             score += weights['avg_waking_respiration_resting_hr']
         
         # Combination 5: Fitness Age + Resting Heart Rate (Validated)
