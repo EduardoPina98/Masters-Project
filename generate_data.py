@@ -1392,143 +1392,194 @@ match option:
 
     case "process":
         
-        df = pd.read_csv("dados_consolidados_pontoB.csv")
+        # df = pd.read_csv("realistic_cvd_dataset.csv")
 
-        df_process = df.drop(columns=["calendar_date"])
+        # df_process = df.drop(columns=["calendar_date", "cvd_risk", "weight_kg"])
 
-        y_target = df_process['cvd_risk']
+        # y_target = df_process['cvd_risk_numeric']
 
-        x_features = df_process.drop(columns=['cvd_risk'])
+        # x_features = df_process.drop(columns=['cvd_risk_numeric'])
         
-        #Disadvanatage: This may not perform well when data is highly skewed.
+        # #Disadvanatage: This may not perform well when data is highly skewed.
+        # scaler = RobustScaler()
+        # x_scaled = pd.DataFrame(scaler.fit_transform(x_features, y_target), columns=x_features.columns)
+
+        # rf = RandomForestClassifier()
+        
+        # rfe = RFE(estimator=rf)
+
+        # tscv = TimeSeriesSplit(n_splits=5)
+
+        # # Create the pipeline
+        # pipeline = Pipeline([
+        #     ('feature_selection', rfe)
+        # ])
+        # # Define the grid parameters to search
+        # #monotonic_cst = None, since its not support for multioutput classifications (i.e. when n_outputs_ > 1)
+        # param_grid = {
+        #     'feature_selection__n_features_to_select': [5, 6, 7, 8, 9],
+        #     'feature_selection__estimator__n_estimators': [100, 200, 300], # number of trees 100 to 500 is usually good. More = better accuracy, slower training.
+        #     'feature_selection__estimator__max_depth': [3, 4, 5, 6], # None mean full grown. Controls overfitting and i wont use None since i have limited resources
+        #     'feature_selection__estimator__min_samples_split': [6, 8, 10, 12],
+        #     'feature_selection__estimator__min_samples_leaf': [4, 5, 6, 8, 10], # i kept the default value since altering the value may smooth the model, especially in regression.
+        #     'feature_selection__estimator__max_features': ['sqrt', 'log2', 0.3, 0.5], #sqrt is default for classification, log2 may provide better results than sqrt but at a cost of performance
+        #     'feature_selection__estimator__bootstrap': [True], # By setting true, it will not use the full dataset in each iteration
+        #     'feature_selection__estimator__max_samples': [0.1, 0.3, 0.5], # 10%, 30% or 50% of total samples 
+        #     'feature_selection__estimator__criterion': ['gini', 'entropy'], # https://datascience.stackexchange.com/questions/10228/when-should-i-use-gini-impurity-as-opposed-to-information-gain-entropy
+        #     'feature_selection__estimator__class_weight': [None, 'balanced']
+        # }
+        # scoring = {
+        #     'accuracy': 'accuracy',
+        #     'f1_macro': 'f1_macro',
+        #     'balanced_accuracy': 'balanced_accuracy'
+        # }
+
+        # # Set up RandomSearchCV
+        # # given the number of parameters the n_iter reflects on the number of combinations presented around 3240. Example, by setting n_iter 10, it will randomly sample only 10 different combinations from those 3240 possible ones
+        # # i could use the max number of iteration to check all possible combinations but for that i would use gridsearch. SInce i have limited resources, i will use a reasonable number of iter to get a good enough combination
+        # # calculate the coverage given the number of iteration and the parameter grid
+        
+        # random_search  = RandomizedSearchCV(
+        #     estimator=pipeline,
+        #     param_distributions=param_grid,
+        #     n_iter=25, #increase if execution time ~10-20 minutes
+        #     cv=tscv,
+        #     scoring=scoring,
+        #     n_jobs=4, # leave one core available so that the VM doesnt crash instead of jobs=-1
+        #     random_state=42,
+        #     refit='f1_macro'
+        # )
+        # start_time = time.time()
+        
+        # # Fit the model
+        # random_search.fit(x_scaled, y_target)
+
+        # end_time = time.time()
+        # execution_time = end_time - start_time
+
+        # best_rfe = random_search.best_estimator_['feature_selection']
+        # selected_features = x_scaled.columns[best_rfe.support_]
+
+        # print(f"Execution time: {execution_time/60:.2f} minutes)")
+        # print("Best parameters found:", random_search.best_params_) # best hyperparameters found
+        # print("Best estimator found:", random_search.best_estimator_) # the full pipeline with best parameters
+        # print(f"Best CV accuracy: {random_search.best_score_:.3f}") # best CV score achieved
+        # #print("Best CV results:", random_search.cv_results_) # detailed info on all tried parameter combos (mean scores, timings, etc).
+
+        # pd.set_option('display.max_rows', None)
+        # results = pd.DataFrame(random_search.cv_results_)
+        # best_index = random_search.best_index_
+
+        # best_results = results.loc[best_index, [
+        #     'mean_test_accuracy', 'std_test_accuracy',
+        #     'mean_test_f1_macro', 'std_test_f1_macro',
+        #     'mean_test_balanced_accuracy', 'std_test_balanced_accuracy'
+        # ]]
+
+        # print(f"Best Scoring Metrics:{best_results}")
+
+
+        # # Plot feature importances
+        # rf_model = best_rfe.estimator_
+
+        # importances = rf_model.feature_importances_
+        # importance_df = pd.DataFrame({
+        #     'Feature': selected_features,
+        #     'Importance': importances
+        # }).sort_values(by='Importance', ascending=False)
+
+        # plt.figure(figsize=(10, 6))
+        # sns.barplot(data=importance_df, x='Importance', y='Feature')
+        # plt.title('Feature Importances from RFE with Random Forest')
+        # plt.tight_layout()
+        # plt.show()
+
+        # # Define the folder path for Point A results
+        # results_folder = 'results_point_A__25_5_1'
+
+        # # Check if folder exists, if not, create it
+        # os.makedirs(results_folder, exist_ok=True)
+
+
+        # selected_features_list = selected_features.tolist()
+        # best_params = random_search.best_params_
+        # best_score = random_search.best_score_
+        # best_estimator = random_search.best_estimator_
+        # best_cv_results = random_search.cv_results_
+        # # Add execution time as a column in the full results
+        # best_cv_results['execution_time_sec'] = execution_time/60
+
+
+        # # Save prints/results to a text file
+        # with open(os.path.join(results_folder, 'random_search_results.txt'), 'w') as f:
+        #     f.write(f"Selected features: {selected_features_list}\n")
+        #     f.write(f"Best parameters found: {best_params}\n")
+        #     f.write(f"Best CV score found: {best_score}\n")
+        #     f.write(f"Best estimator found: {best_estimator}\n")
+        #     f.write(f"Best cv results found: {best_cv_results}\n")
+
+        # # Save selected features as JSON
+        # with open(os.path.join(results_folder, 'selected_features.json'), 'w') as f:
+        #     json.dump(selected_features_list, f)
+
+        # # Save the best model pipeline
+        # joblib.dump(best_estimator, os.path.join(results_folder, 'best_pipeline.pkl'))
+
+        # # Save feature importances as CSV
+        # importance_df.to_csv(os.path.join(results_folder, 'feature_importances.csv'), index=False)
+
+        loaded_pipeline = joblib.load('/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/best_pipeline.pkl')
+
+        # Load your data (should be consistent with how you trained)
+        df = pd.read_csv("realistic_cvd_dataset.csv")
+        df_process = df.drop(columns=["calendar_date", "cvd_risk"])
+        y_target = df_process['cvd_risk_numeric']
+        x_features = df_process.drop(columns=['cvd_risk_numeric'])
+
         scaler = RobustScaler()
         x_scaled = pd.DataFrame(scaler.fit_transform(x_features, y_target), columns=x_features.columns)
 
-        rf = RandomForestClassifier()
-        
-        rfe = RFE(estimator=rf)
+        # Re-initialize CV strategy
+        tscv = TimeSeriesSplit(n_splits=5)
 
-        tscv = TimeSeriesSplit(n_splits=7)
+        # Get cross-validated predictions using the loaded pipeline
+        y_true_all = []
+        y_pred_all = []
 
-        # Create the pipeline
-        pipeline = Pipeline([
-            ('feature_selection', rfe)
-        ])
-        # Define the grid parameters to search
-        #monotonic_cst = None, since its not support for multioutput classifications (i.e. when n_outputs_ > 1)
-        param_grid = {
-            'feature_selection__n_features_to_select': [5, 6, 7, 8],
-            'feature_selection__estimator__n_estimators': [100, 200, 300], # number of trees 100 to 500 is usually good. More = better accuracy, slower training.
-            'feature_selection__estimator__max_depth': [3, 4, 5, 6], # None mean full grown. Controls overfitting and i wont use None since i have limited resources
-            'feature_selection__estimator__min_samples_split': [6, 8, 10, 12],
-            'feature_selection__estimator__min_samples_leaf': [4, 5, 6, 8, 10], # i kept the default value since altering the value may smooth the model, especially in regression.
-            'feature_selection__estimator__max_features': ['sqrt', 'log2', 0.3, 0.5], #sqrt is default for classification, log2 may provide better results than sqrt but at a cost of performance
-            'feature_selection__estimator__bootstrap': [True], # By setting true, it will not use the full dataset in each iteration
-            'feature_selection__estimator__max_samples': [0.1, 0.3, 0.5], # 10%, 30% or 50% of total samples 
-            'feature_selection__estimator__criterion': ['gini', 'entropy'], # https://datascience.stackexchange.com/questions/10228/when-should-i-use-gini-impurity-as-opposed-to-information-gain-entropy
-            'feature_selection__estimator__class_weight': [None, 'balanced']
-        }
+        for train_idx, test_idx in tscv.split(x_scaled):
+            X_train, X_test = x_scaled.iloc[train_idx], x_scaled.iloc[test_idx]
+            y_train, y_test = y_target.iloc[train_idx], y_target.iloc[test_idx]
 
-        # Set up RandomSearchCV
-        # given the number of parameters the n_iter reflects on the number of combinations presented around 3240. Example, by setting n_iter 10, it will randomly sample only 10 different combinations from those 3240 possible ones
-        # i could use the max number of iteration to check all possible combinations but for that i would use gridsearch. SInce i have limited resources, i will use a reasonable number of iter to get a good enough combination
-        # calculate the coverage given the number of iteration and the parameter grid
-        
-        random_search  = RandomizedSearchCV(
-            estimator=pipeline,
-            param_distributions=param_grid,
-            n_iter=75, #increase if execution time ~10-20 minutes
-            cv=tscv,
-            scoring='accuracy',
-            n_jobs=4, # leave one core available so that the VM doesnt crash instead of jobs=-1
-            random_state=0
-        )
-        
-        # Fit the model
-        random_search.fit(x_scaled, y_target)
-        
-        best_rfe = random_search.best_estimator_['feature_selection']
-        selected_features = x_scaled.columns[best_rfe.support_]
+            loaded_pipeline.fit(X_train, y_train)
+            y_pred = loaded_pipeline.predict(X_test)
 
-        print("Best parameters found:", random_search.best_params_) # best hyperparameters found
-        print("Best estimator found:", random_search.best_estimator_) # the full pipeline with best parameters
-        print(f"Best CV accuracy: {random_search.best_score_:.3f}") # best CV score achieved
-        #print("Best CV results:", random_search.cv_results_) # detailed info on all tried parameter combos (mean scores, timings, etc).
+            y_true_all.extend(y_test)
+            y_pred_all.extend(y_pred)
 
-        pd.set_option('display.max_rows', None)
-        results = pd.DataFrame(random_search.cv_results_)
-        print(results[['mean_test_score', 'std_test_score']])
-
-        # Plot feature importances
-        rf_model = best_rfe.estimator_
-
-        importances = rf_model.feature_importances_
-        importance_df = pd.DataFrame({
-            'Feature': selected_features,
-            'Importance': importances
-        }).sort_values(by='Importance', ascending=False)
-
-        plt.figure(figsize=(10, 6))
-        sns.barplot(data=importance_df, x='Importance', y='Feature')
-        plt.title('Feature Importances from RFE with Random Forest')
-        plt.tight_layout()
+        # Evaluate after all folds
+        print(classification_report(y_true_all, y_pred_all))
+        print(confusion_matrix(y_true_all, y_pred_all))
+        #Confusion matrix and plot
+        conf_matrix = confusion_matrix(y_true_all, y_pred_all)
+        disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix)
+        disp.plot(cmap="Blues", values_format='d')
+        plt.title("Cross-Validated Confusion Matrix")
         plt.show()
-
-        # Define the folder path for Point A results
-        results_folder = 'results_point_B_2'
-
-        # Check if folder exists, if not, create it
-        os.makedirs(results_folder, exist_ok=True)
-
-
-        selected_features_list = selected_features.tolist()
-        best_params = random_search.best_params_
-        best_score = random_search.best_score_
-        best_estimator = random_search.best_estimator_
-        best_cv_results = random_search.cv_results_
-
-
-        # Save prints/results to a text file
-        with open(os.path.join(results_folder, 'random_search_results.txt'), 'w') as f:
-            f.write(f"Selected features: {selected_features_list}\n")
-            f.write(f"Best parameters found: {best_params}\n")
-            f.write(f"Best CV score found: {best_score}\n")
-            f.write(f"Best estimator found: {best_estimator}\n")
-            f.write(f"Best cv rseults found: {best_cv_results}\n")
-
-        # Save selected features as JSON
-        with open(os.path.join(results_folder, 'selected_features.json'), 'w') as f:
-            json.dump(selected_features_list, f)
-
-        # Save the best model pipeline
-        joblib.dump(best_estimator, os.path.join(results_folder, 'best_pipeline.pkl'))
-
-        # Save feature importances as CSV
-        importance_df.to_csv(os.path.join(results_folder, 'feature_importances.csv'), index=False)
-
     case "ml_SVM":
         # Load data
-        df = pd.read_csv("dados_consolidados_pontoB.csv")
-
-        df_new = df.sample(frac=1, random_state=42).reset_index(drop=True)
-
-        save_df = df_new.to_csv("new_datasetA_shuffle", index=False)
+        df = pd.read_csv("realistic_cvd_dataset.csv")
 
         # Load selected features
-        with open("results_point_B/selected_features.json", "r") as f:
+        with open("/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/selected_features.json", "r") as f:
             selected_features = json.load(f)
 
-        X = df[selected_features]
-        y = df["cvd_risk"]
+        X_train = df[selected_features]
+        y_train = df["cvd_risk_numeric"]
 
-        # 80/20 train-test split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, stratify=y, random_state=42
-        )
-
+        
         pipeline = Pipeline([
             ('scaler', RobustScaler()),
-            ('svm', SVC(random_state=42))
+            ('svm', SVC())
         ])
 
         param_dist = {
@@ -1538,11 +1589,11 @@ match option:
             'svm__tol': [1e-1, 1e-2, 1e-3, 1e-4],
             'svm__shrinking': [True, False],
             'svm__class_weight': [None, 'balanced'],
-            'svm__decision_function_shape': ['ovr'],
+            'svm__decision_function_shape': ['ovr'], # default value
             'svm__break_ties': [True, False]
         }
 
-        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        tscv = TimeSeriesSplit(n_splits=5)
 
         scoring = {
             'accuracy': 'accuracy',
@@ -1554,10 +1605,10 @@ match option:
         random_search = RandomizedSearchCV(
             pipeline,
             param_distributions=param_dist,
-            n_iter=50,
+            n_iter=25,
             scoring=scoring,
-            refit='accuracy',
-            cv=cv,
+            refit='f1_macro',
+            cv=tscv,
             n_jobs=4,
             random_state=42
         )
@@ -1572,29 +1623,6 @@ match option:
         print(f"Best CV score: {random_search.best_score_:.3f}")
         print("STD of Accuracy:", random_search.cv_results_['std_test_accuracy'])
 
-        # Predict on test set
-        y_pred = random_search.best_estimator_.predict(X_test)
-
-        # Confusion Matrix
-        cm = confusion_matrix(y_test, y_pred, labels=[0, 1, 2])
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Low", "Medium", "High"])
-        disp.plot(cmap='Blues')
-        plt.title("Confusion Matrix - Test Set")
-        plt.show()
-        
-
-        # Classification Report
-        print("Classification Report:\n", classification_report(y_test, y_pred))
-
-        # Save model and metadata
-        results_folder = "svm_results_point_A_1"
-        os.makedirs(results_folder, exist_ok=True)
-        joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
-
-        with open(os.path.join(results_folder, "training_svm_info.txt"), "w") as f:
-            f.write(f"Execution time (s): {execution_time:.2f}\n")
-            f.write(f"Best parameters: {random_search.best_params_}\n")
-            f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
 
     case "ml_A_LR":
         # Load data

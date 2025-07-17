@@ -94,7 +94,7 @@ def compute_cvd_risk_label(row, age):
 
     if score <= 0.3:
         return 'Low'
-    elif score <= 0.6:
+    elif score < 0.5:
         return 'Medium'
     else:
         return 'High'
@@ -109,8 +109,8 @@ height_cm = 175
 
 # --- Profile Type Distribution (adjust as desired) ---
 profile_types = ['healthy', 'sedentary', 'cvd']
-profile_probs = [0.4, 0.35, 0.25]  # simulates real-world population
-
+# profile_probs = [0.4, 0.35, 0.25]  # simulates real-world population (testing)
+profile_probs = [0.2, 0.4, 0.4] # simulates balanced risk scnearios for training (not working properly)
 # --- Init Lists ---
 rows = []
 
@@ -131,6 +131,8 @@ for i in range(records):
         sleep_sec = int(np.random.normal(7.5 * 3600, 1800))
         sleep_rr = int(np.random.normal(15, 0.5))
         sleep_hr = int(np.random.normal(52, 5))
+        avg_resp = round(random.randint(13, 15))
+        max_hr = int(np.random.normal(170, 10))
     elif profile == 'sedentary':
         vo2 = np.random.normal(35, 4)
         bmi = np.random.normal(27, 2)
@@ -142,6 +144,8 @@ for i in range(records):
         sleep_sec = int(np.random.normal(6.5 * 3600, 2400))
         sleep_rr = int(np.random.normal(16, 1))
         sleep_hr = int(np.random.normal(65, 10))
+        avg_resp = random.randint(14, 16)
+        max_hr = int(np.random.normal(150, 10))
     else:  # cvd
         vo2 = np.random.normal(27, 5)
         bmi = np.random.normal(31, 4)
@@ -153,33 +157,38 @@ for i in range(records):
         sleep_sec = int(np.random.normal(9 * 3600, 3600))
         sleep_rr = int(np.random.normal(17, 1.5))
         sleep_hr = int(np.random.normal(78, 12))
+        avg_resp = int(np.random.normal(16, 1))
+        max_hr = int(np.random.normal(135, 12))
 
     # --- Add noise & crossover symptoms ---
     bmi = max(15, bmi + np.random.normal(0, 1.5))
     vo2 = np.clip(vo2 + np.random.normal(0, 2), 15, 60)
-    resting_hr = max(35, resting_hr + np.random.normal(0, 3))
+    #resting_hr = max(35, resting_hr + np.random.normal(0, 3))
+    resting_hr = max(35, (72 - vo2 * 0.6) + np.random.normal(0, 3))
     spo2 = np.clip(spo2 + np.random.normal(0, 0.5), 85, 100)
     steps = max(1000, int(steps + np.random.normal(0, 300)))
     hydration = max(800, int(hydration + np.random.normal(0, 150)))
     sleep_sec = max(3 * 3600, sleep_sec + int(np.random.normal(0, 600)))
     sleep_rr = int(sleep_rr + np.random.normal(0, 1))
     sleep_hr = round(sleep_hr + np.random.normal(0, 3), 1)
+    avg_resp = round(avg_resp + np.random.normal(0, 1), 1)
+    max_hr = max(max_hr, int(resting_hr + 20))
 
     # --- Derived features ---
     weight = round(bmi * ((height_cm / 100) ** 2), 1)
-    fitness_age = int(60 - (vo2 * 0.7) + np.random.normal(0, 1.5))
-    fitness_age = np.clip(fitness_age, 20, 75)
+    fitness_age = int(60 - (vo2 * 0.9) + np.random.normal(0, 1.5)) #added 0.9 intead of 0.7 coef to test
+    fitness_age = np.clip(fitness_age, 18, 75)
 
     row = {
         'calendar_date': date.strftime('%Y-%m-%d'),
         'vo2_max_precise': round(vo2, 1),
         'steps': steps,
         'min_heart_rate': int(resting_hr - np.random.normal(10, 3)),
-        'max_heart_rate': int(resting_hr + np.random.normal(30, 8)),
+        'max_heart_rate': max_hr, #int(resting_hr + np.random.normal(70, 8)),
         'resting_heart_rate': int(resting_hr),
-        'max_respiration': int(np.random.normal(20, 2)),
-        'min_respiration': int(np.random.normal(11, 1)),
-        'avg_waking_respiration': int(np.random.normal(15.5, 1)),
+        'max_respiration': int(avg_resp + np.random.normal(3, 0.5)), #int(np.random.normal(20, 2)),
+        'min_respiration': int(avg_resp - np.random.normal(3, 0.5)), #int(np.random.normal(11, 1)),
+        'avg_waking_respiration': avg_resp,
         'weight_kg': weight,
         'fitness_age': fitness_age,
         'bmi': round(bmi, 1),
@@ -202,18 +211,20 @@ df = pd.DataFrame(rows)
 # Optional: numeric label
 df['cvd_risk_numeric'] = df['cvd_risk'].map({'Low': 0, 'Medium': 1, 'High': 2})
 
+print(df['cvd_risk'].value_counts())
+
 # Save
-df.to_csv("realistic_cvd_dataset.csv", index=False)
+df.to_csv("realistic_cvd_dataset1.csv", index=False)
 
 print(f"Duplicated values: {df.duplicated().sum()}")
 
-output_folder = "realistic_cvd_dataset_A_Medium_Risk"
+output_folder = "realistic_cvd_dataset_A_Low_Risk"
 os.makedirs(output_folder, exist_ok=True)
 
 df = pd.read_csv("realistic_cvd_dataset.csv")
 
 # ✅ Filter only low-risk individuals
-df = df[df['cvd_risk'] == 'Medium']
+df = df[df['cvd_risk'] == 'Low']
 
 # Drop non-numeric columns for correlation and boxplot input
 df_numeric = df.drop(columns=["calendar_date", "cvd_risk", "cvd_risk_numeric"])
@@ -267,7 +278,3 @@ heatmap_file = os.path.join(output_folder, "correlation_heatmap_low_risk.png")
 plt.savefig(heatmap_file, dpi=300, bbox_inches='tight')
 plt.show()
 plt.close()
-
-# TODO: alter calculation of resting heart rate like respiration so that min and max are based on the value calculated
-# TODO: add derive between resting heart rate and vo2max
-# TODO: Check the values foe each scenario and compare with the orignal script to generate data
