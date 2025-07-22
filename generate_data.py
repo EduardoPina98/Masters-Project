@@ -133,7 +133,7 @@ from sklearn.preprocessing import RobustScaler
 from sklearn.feature_selection import RFE
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import RandomizedSearchCV, cross_val_score, train_test_split
+from sklearn.model_selection import RandomizedSearchCV, cross_val_score, train_test_split, GridSearchCV
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import ConfusionMatrixDisplay, accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import learning_curve
@@ -1270,6 +1270,14 @@ match option:
         # ]
         # df = df[new_order]
 
+        # df.to_csv("perfil2_pontoB_dados.csv", index=False)
+
+        # Carregar o dataset
+        # df = pd.read_csv("perfil2_pontoB_dados.csv")
+        # df['cvd_risk'] = 2
+
+        # df.to_csv("perfil2_pontoB_dados.csv", index=False)
+
         # corr_bmi = df['fitness_age'].corr(df['bmi'])
         # corr_vo2 = df['fitness_age'].corr(df['vo2_max_precise'])
         # corr_rest_hr_vo2 = df['resting_heart_rate'].corr(df['vo2_max_precise'])
@@ -1280,13 +1288,7 @@ match option:
         # print(f"Correlação entre resting_heart_rate e vo2_max_precise: {corr_rest_hr_vo2:.3f}")
         # print(f"Correlação entre bmi e weight_kg: {corr_bmi_weight:.3f}")
 
-        # df.to_csv("perfil2_pontoB_dados.csv", index=False)
 
-        # Carregar o dataset
-        # df = pd.read_csv("perfil2_pontoB_dados.csv")
-        # df['cvd_risk'] = 2
-
-        # df.to_csv("perfil2_pontoB_dados.csv", index=False)
 
         output_folder = "plots_perfil2_pontoB"
         os.makedirs(output_folder, exist_ok=True)
@@ -1392,7 +1394,7 @@ match option:
 
     case "process":
         
-        # df = pd.read_csv("realistic_cvd_dataset.csv")
+        # df = pd.read_csv("realistic_cvd_dataset2.csv")
 
         # df_process = df.drop(columns=["calendar_date", "cvd_risk", "weight_kg"])
 
@@ -1408,7 +1410,7 @@ match option:
         
         # rfe = RFE(estimator=rf)
 
-        # tscv = TimeSeriesSplit(n_splits=5)
+        # tscv = TimeSeriesSplit(n_splits=10)
 
         # # Create the pipeline
         # pipeline = Pipeline([
@@ -1442,7 +1444,7 @@ match option:
         # random_search  = RandomizedSearchCV(
         #     estimator=pipeline,
         #     param_distributions=param_grid,
-        #     n_iter=25, #increase if execution time ~10-20 minutes
+        #     n_iter=100, #increase if execution time ~10-20 minutes
         #     cv=tscv,
         #     scoring=scoring,
         #     n_jobs=4, # leave one core available so that the VM doesnt crash instead of jobs=-1
@@ -1495,7 +1497,7 @@ match option:
         # plt.show()
 
         # # Define the folder path for Point A results
-        # results_folder = 'results_point_A__25_5_1'
+        # results_folder = 'results_point_B__100_10'
 
         # # Check if folder exists, if not, create it
         # os.makedirs(results_folder, exist_ok=True)
@@ -1528,10 +1530,13 @@ match option:
         # # Save feature importances as CSV
         # importance_df.to_csv(os.path.join(results_folder, 'feature_importances.csv'), index=False)
 
-        loaded_pipeline = joblib.load('/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/best_pipeline.pkl')
+        #best results
+        #loaded_pipeline = joblib.load('/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/best_pipeline.pkl')
+        loaded_pipeline = joblib.load('/home/eduardo/Desktop/master_project/Masters-Project/results_point_B__25_10/best_pipeline.pkl')
+
 
         # Load your data (should be consistent with how you trained)
-        df = pd.read_csv("realistic_cvd_dataset.csv")
+        df = pd.read_csv("realistic_cvd_dataset2.csv")
         df_process = df.drop(columns=["calendar_date", "cvd_risk"])
         y_target = df_process['cvd_risk_numeric']
         x_features = df_process.drop(columns=['cvd_risk_numeric'])
@@ -1565,12 +1570,15 @@ match option:
         disp.plot(cmap="Blues", values_format='d')
         plt.title("Cross-Validated Confusion Matrix")
         plt.show()
+    
     case "ml_SVM":
         # Load data
-        df = pd.read_csv("realistic_cvd_dataset.csv")
+        df = pd.read_csv("realistic_cvd_dataset2.csv")
 
         # Load selected features
-        with open("/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/selected_features.json", "r") as f:
+        #with open("/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/selected_features.json", "r") as f:
+        with open("/home/eduardo/Desktop/master_project/Masters-Project/results_point_B__25_10/selected_features.json", "r") as f:
+        
             selected_features = json.load(f)
 
         X_train = df[selected_features]
@@ -1579,10 +1587,10 @@ match option:
         
         pipeline = Pipeline([
             ('scaler', RobustScaler()),
-            ('svm', SVC())
+            ('svm', SVC()) # probability=True slows the ml by alot, more than 1h and still waiting
         ])
 
-        param_dist = {
+        param_dist = { # 1024 possible combinations
             'svm__C': [0.1, 0.2, 0.5, 1, 2, 5, 10, 100],
             'svm__kernel': ['linear', 'rbf'],
             'svm__gamma': ['scale', 'auto'],
@@ -1593,43 +1601,82 @@ match option:
             'svm__break_ties': [True, False]
         }
 
-        tscv = TimeSeriesSplit(n_splits=5)
+        tscv = TimeSeriesSplit(n_splits=10)
 
         scoring = {
-            'accuracy': 'accuracy',
-            'f1_macro': 'f1_macro',
-            'precision_macro': 'precision_macro',
-            'recall_macro': 'recall_macro'
+            'f1_weighted': 'f1_weighted',
+            'precision_weighted': 'precision_weighted',
+            'recall_weighted': 'recall_weighted',
+            'balanced_accuracy': 'balanced_accuracy'
         }
 
-        random_search = RandomizedSearchCV(
-            pipeline,
-            param_distributions=param_dist,
-            n_iter=25,
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_dist,
             scoring=scoring,
-            refit='f1_macro',
+            refit='f1_weighted',
             cv=tscv,
-            n_jobs=4,
-            random_state=42
+            pre_dispatch=4,
+            return_train_score=True
         )
 
         # Track training time
         start_time = time.time()
-        random_search.fit(X_train, y_train)
+        grid_search.fit(np.ascontiguousarray(X_train, dtype=np.float64), y_train) # not much of a differenec in time execution. I will use it anyway to prevent copy
         execution_time = time.time() - start_time
 
-        print(f"Execution time: {execution_time:.2f}")
-        print(f"Best parameters: {random_search.best_params_}")
-        print(f"Best CV score: {random_search.best_score_:.3f}")
-        print("STD of Accuracy:", random_search.cv_results_['std_test_accuracy'])
+
+        results = pd.DataFrame(grid_search.cv_results_)
+        best_index = grid_search.best_index_
+
+        best_results = results.loc[best_index, [
+            'mean_test_f1_weighted', 'std_test_f1_weighted',
+            'mean_test_precision_weighted', 'std_test_precision_weighted',
+            'mean_test_recall_weighted', 'std_test_recall_weighted',
+            'mean_test_balanced_accuracy', 'std_test_balanced_accuracy'
+        ]]
+
+        print(f"Best parameters: {grid_search.best_params_}")
+        print(f"Best CV score: {grid_search.best_score_:.3f}")
+        print("Best estimator found:", grid_search.best_estimator_) # the full pipeline with best parameters
+        print(f"Execution time: {execution_time/60:.2f} minutes")
+        print(f"Best Scoring Metrics:{best_results}")
+        print(f"Refit time using best model on whole dataset (sec):{grid_search.refit_time_}")
+
+        # Create folder
+        results_folder = 'svm_results_point_B_grid_search_10_contiguous'
+        os.makedirs(results_folder, exist_ok=True)
+
+        selected_features = X_train.columns.tolist()
+        best_params = grid_search.best_params_
+        best_score = grid_search.best_score_
+        best_estimator = grid_search.best_estimator_
+        best_cv_results = grid_search.cv_results_
+        # Add execution time as a column in the full results
+        best_cv_results['execution_time'] = execution_time/60
 
 
-    case "ml_A_LR":
+        # Save prints/results to a text file
+        with open(os.path.join(results_folder, 'grid_search_results.txt'), 'w') as f:
+            f.write(f"Selected features: {selected_features}\n")
+            f.write(f"Best parameters found: {best_params}\n")
+            f.write(f"Best estimator found: {best_estimator}\n")
+            f.write(f"Best CV score found: {best_score}\n")
+            f.write(f"Best Scoring Metrics:{best_results}")
+            f.write(f"Best cv results found: {best_cv_results}\n")
+            f.write(f"Refit time using best model on whole dataset (sec):{grid_search.refit_time_}")
+
+    
+        # Save the best model
+        joblib.dump(grid_search.best_estimator_, os.path.join(results_folder, 'best_svm_pipeline.pkl'))
+
+    case "ml_LR":
         # Load data
-        df = pd.read_csv("dados_consolidados_pontoA.csv")
+        df = pd.read_csv("realistic_cvd_dataset2.csv")
 
         # Load selected features
-        with open("results_point_A/selected_features.json", "r") as f:
+        #with open("/home/eduardo/Desktop/master_project/Masters-Project/results_point_A__25_5/selected_features.json", "r") as f:
+        with open("/home/eduardo/Desktop/master_project/Masters-Project/results_point_B__25_10/selected_features.json", "r") as f:
             selected_features = json.load(f)
 
         X_train = df[selected_features]
@@ -1637,76 +1684,87 @@ match option:
 
         pipeline = Pipeline([
             ('scaler', RobustScaler()),
-            ('lr', LogisticRegression(multi_class='multinomial', random_state=42))
+            ('lr', LogisticRegression(multi_class='multinomial'))
         ])
 
-        # SVC Tips on Practical Use: https://scikit-learn.org/stable/modules/svm.html#shrinking-svm
-        # Avoiding data copy: For SVC, if the data passed to certain methods is not C-ordered contiguous and double precision, 
-        # it will be copied before calling the underlying C implementation. 
-        # You can check whether a given numpy array is C-contiguous by inspecting its flags attribute.
-
         # Hyperparameter search space
-        param_dist = {
+        param_dist = { #960 possible combinations
             'lr__penalty': ['l2'],
             'lr__tol': [1e-1, 1e-2, 1e-3, 1e-4], # Controls the stopping criterion. Smaller values = more precision but slower training.
-            'lr__C': [0.1, 0.2, 0.5, 1, 2, 5], # C param adjust the regularization (Low values: High regularization, allows some misclassifications, focusing on general margin. Better with noisy data. 
+            'lr__C': [0.3, 0.5, 1, 2, 3], # C param adjust the regularization (Low values: High regularization, allows some misclassifications, focusing on general margin. Better with noisy data. 
                                                                                     #High values: Low regularization, Tries to classify all points correctly, including outliers. Can lead to overfitting.)
+            'lr__dual': [False], #Dual formulation is only implemented for l2 penalty with liblinear solver (only lbfgs and newton-cg available for this case). Prefer dual=False when n_samples > n_features.
+            'lr__fit_intercept': [True, False],
             'lr__class_weight': [None, 'balanced'], # Class balancing (not impactful with balanced data)
-            'lr__solver': ['lbfgs', 'newton-cg'],
-            'lr__max_iter': [100, 150, 200, 250, 300]
+            'lr__solver': ['lbfgs', 'newton-cg', 'sag'],
+            'lr__warm_start': [True, False],
+            'lr__max_iter': [100, 200, 300]
         }
 
         scoring = {
-            'accuracy': 'accuracy',
-            'f1_macro': 'f1_macro',
-            'precision_macro': 'precision_macro',
-            'recall_macro': 'recall_macro'
+            'f1_weighted': 'f1_weighted',
+            'precision_weighted': 'precision_weighted',
+            'recall_weighted': 'recall_weighted',
+            'balanced_accuracy': 'balanced_accuracy'
         }
 
         # Time series cross-validation
-        tscv = TimeSeriesSplit(n_splits=5)
+        tscv = TimeSeriesSplit(n_splits=10)
 
-        random_search = RandomizedSearchCV(
+        grid_search = GridSearchCV(
             pipeline,
-            param_distributions=param_dist,
-            n_iter=25,
+            param_grid=param_dist,
             scoring=scoring,
-            refit='f1_macro',
+            refit='f1_weighted',
             cv=tscv,
             n_jobs=4
         )
 
         # Track training time
         start_time = time.time()
-        random_search.fit(X_train, y_train)
+        grid_search.fit(X_train, y_train)
         execution_time = time.time() - start_time
 
-        print(f"Execution time: {execution_time:.2f}")
-        print(f"Best parameters: {random_search.best_params_}")
-        print(f"Best CV score: {random_search.best_score_:.3f}")
+        results = pd.DataFrame(grid_search.cv_results_)
+        best_index = grid_search.best_index_
+
+        best_results = results.loc[best_index, [
+            'mean_test_f1_weighted', 'std_test_f1_weighted',
+            'mean_test_precision_weighted', 'std_test_precision_weighted',
+            'mean_test_recall_weighted', 'std_test_recall_weighted',
+            'mean_test_balanced_accuracy', 'std_test_balanced_accuracy'
+        ]]
+
+        print(f"Execution time: {execution_time / 60}")
+        print(f"Best parameters: {grid_search.best_params_}")
+        print(f"Best CV score: {grid_search.best_score_:.3f}")
+        print("Best estimator found:", grid_search.best_estimator_) # the full pipeline with best parameters
+        print(f"Best Scoring Metrics:{best_results}")
 
 
-        # Save model and training metadata
-        results_folder = "lr_results_dataset_A"
+        # Create folder
+        results_folder = 'lr_results_point_B_grid_search_10'
         os.makedirs(results_folder, exist_ok=True)
-        joblib.dump(random_search.best_estimator_, os.path.join(results_folder, "svm_best_model.pkl"))
 
-        with open(os.path.join(results_folder, "training_svm_info.txt"), "w") as f:
-            f.write(f"Execution time (s): {execution_time:.2f}\n")
-            f.write(f"Best parameters: {random_search.best_params_}\n")
-            f.write(f"Best CV score: {random_search.best_score_:.3f}\n")
+        selected_features = X_train.columns.tolist()
+        best_params = grid_search.best_params_
+        best_score = grid_search.best_score_
+        best_estimator = grid_search.best_estimator_
+        # Add execution time as a column in the full results
+        best_cv_results = grid_search.cv_results_
+        best_cv_results['execution_time_minutes'] = execution_time / 60
 
-        results_df = pd.DataFrame(random_search.cv_results_)
 
-        # Sort by the refit metric (f1_macro)
-        top_results = results_df.sort_values(by='mean_test_f1_macro', ascending=False)
+        # Save prints/results to a text file
+        with open(os.path.join(results_folder, 'grid_search_results.txt'), 'w') as f:
+            f.write(f"Selected features: {selected_features}\n")
+            f.write(f"Best parameters found: {best_params}\n")
+            f.write(f"Best estimator found: {best_estimator}\n")
+            f.write(f"Best CV score found: {best_score}\n")
+            f.write(f"Best Scoring Metrics:{best_results}")
+            f.write(f"Best cv results found: {best_cv_results}\n")
 
-        # Display top 5 configurations
-        print(top_results[['mean_test_accuracy', 'mean_test_f1_macro', 'mean_test_precision_macro', 'mean_test_recall_macro', 'params']].head())
+        # Save best estimator
+        joblib.dump(best_estimator, os.path.join(results_folder, 'best_lr_pipeline.pkl'))
 
-        # Save CV RScv results
-        results_df.to_csv(os.path.join(results_folder, "cv_results.csv"), index=False)
 
-        
-
-        print("LR training and saving completed.")
