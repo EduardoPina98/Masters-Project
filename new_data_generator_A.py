@@ -94,7 +94,7 @@ def compute_cvd_risk_label(row, age):
 
     if score <= 0.3:
         return 'Low'
-    elif score < 0.5:
+    elif score >= 0.3 and score < 0.5:
         return 'Medium'
     else:
         return 'High'
@@ -110,7 +110,7 @@ height_cm = 175
 # --- Profile Type Distribution (adjust as desired) ---
 profile_types = ['healthy', 'sedentary', 'cvd']
 # profile_probs = [0.4, 0.35, 0.25]  # simulates real-world population (testing)
-profile_probs = [0.2, 0.4, 0.4] # simulates balanced risk scnearios for training (not working properly)
+profile_probs = [0.2, 0.4, 0.4] # simulates balanced risk scnearios for training
 # --- Init Lists ---
 rows = []
 
@@ -196,7 +196,7 @@ for i in range(records):
         'avg_spo2': round(spo2, 1),
         'min_spo2': round(sleep_spo2 - np.random.uniform(1.0, 3.5), 1),
         'avg_sleep_spo2': round(sleep_spo2, 1),
-        'sleep_time_sec': sleep_sec,
+        'sleep_time_sec': sleep_sec / 3600,
         'sleep_avg_respiration': sleep_rr,
         'sleep_resting_heart_rate': sleep_hr
     }
@@ -218,7 +218,7 @@ df.to_csv("realistic_cvd_dataset1.csv", index=False)
 
 print(f"Duplicated values: {df.duplicated().sum()}")
 
-output_folder = "realistic_cvd_dataset_A_Low_Risk"
+output_folder = "plots_perfil0_pontoA"
 os.makedirs(output_folder, exist_ok=True)
 
 df = pd.read_csv("realistic_cvd_dataset.csv")
@@ -226,8 +226,10 @@ df = pd.read_csv("realistic_cvd_dataset.csv")
 # ✅ Filter only low-risk individuals
 df = df[df['cvd_risk'] == 'Low']
 
+
 # Drop non-numeric columns for correlation and boxplot input
 df_numeric = df.drop(columns=["calendar_date", "cvd_risk", "cvd_risk_numeric"])
+
 
 # Set seaborn theme
 sns.set_theme(style="whitegrid", palette="muted")

@@ -196,7 +196,7 @@ metric_groups = {
 #         'avg_spo2': round(spo2, 1),
 #         'min_spo2': round(sleep_spo2 - np.random.uniform(1.0, 3.5), 1),
 #         'avg_sleep_spo2': round(sleep_spo2, 1),
-#         'sleep_time_sec': sleep_sec,
+#         'sleep_time_sec': sleep_sec / 3600,
 #         'sleep_avg_respiration': sleep_rr,
 #         'sleep_resting_heart_rate': sleep_hr
 #     }
@@ -218,10 +218,10 @@ metric_groups = {
 
 # print(f"Duplicated values: {df.duplicated().sum()}")
 
-output_folder = "plots_perfil2_pontoB"
+output_folder = "plots_perfil2_pontoA"
 os.makedirs(output_folder, exist_ok=True)
 
-df = pd.read_csv("realistic_cvd_dataset2.csv")
+df = pd.read_csv("realistic_cvd_dataset1.csv")
 
 # ✅ Filter only low-risk individuals
 df = df[df['cvd_risk'] == 'High']
