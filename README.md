@@ -1,4 +1,4 @@
-# Masters-Project
+# Master Degree Project
 Machine Learning Models for Detecting Chronic Disease Progression Based on VO2max for Cardiovascular Diseases and Type 2 Diabetes using SmartWatches.
 
 ## 📌 Project Overview
